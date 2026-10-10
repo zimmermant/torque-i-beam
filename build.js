@@ -10,7 +10,7 @@ const SRC = join(root, 'src');
 
 // Dependency order. app.js runs last because it touches the DOM immediately.
 const MODULES = [
-  'physics.js', 'format.js', 'svg.js', 'geometry.js', 'state.js', 'app.js'
+  'physics.js', 'format.js', 'svg.js', 'geometry.js', 'state.js', 'steps.js', 'app.js'
 ];
 
 // Anchored at column 0 on purpose. Every top-level declaration in src/ starts
