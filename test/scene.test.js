@@ -262,20 +262,25 @@ test('pickGlyph keeps the default while nothing is in the way', () => {
   assert.strictEqual(pickGlyph(cands, { segments: [], boxes: [] }), cands[0]);
 });
 
+// Mutation: returning candidates[0] (or the last candidate, or ignoring clearance) in the
+// fallback. The three candidates here are blocked by DIFFERENT amounts (0, 5 and 3 px), all
+// under GLYPH_CLEAR_GOOD, and the best one is neither first nor last.
+// (An earlier version blocked everything with a dense grid; every candidate then scored
+// exactly 0, so a pickGlyph that always returned the first candidate passed.)
 test('when every candidate is blocked, pickGlyph takes the one with the most room', () => {
-  const d = triples[2];
-  const { from, to } = arrowPx({ x: 0, y: 0 }, components(50, d.angle));
-  const cands = glyphCandidates(from, to, d);
-  // a dense grid of lines, 8 px apart across the whole neighbourhood: nothing can be 6 px clear
-  const grid = [];
-  for (let k = -30; k <= 30; k++) {
-    grid.push({ p: { x: from.x - 250, y: from.y + k * 8 }, q: { x: from.x + 250, y: from.y + k * 8 } });
-  }
-  const everything = { segments: grid, boxes: [] };
-  assert.ok(cands.every(g => glyphClear(g, everything) < GLYPH_CLEAR_GOOD), 'the setup must block every candidate');
-  const picked = pickGlyph(cands, everything);
-  const best = Math.max(...cands.map(g => glyphClear(g, everything)));
-  assert.ok(near(glyphClear(picked, everything), best, 1e-9));
+  const tri = x => ({
+    a: { x, y: 0 }, b: { x: x + 10, y: 0 }, v: { x, y: 10 },
+    labels: [{ text: '3', x, y: -500, anchor: 'middle' }, { text: '4', x, y: -520, anchor: 'middle' },
+             { text: '5', x, y: -540, anchor: 'middle' }]
+  });
+  const cands = [tri(0), tri(100), tri(200)];
+  const wall = x => ({ p: { x, y: -50 }, q: { x, y: 50 } });
+  const everything = { segments: [wall(0), wall(95), wall(197)], boxes: [] };
+  const clears = cands.map(g => glyphClear(g, everything));
+  assert.ok(near(clears[0], 0, 1e-6) && near(clears[1], 5, 1e-6) && near(clears[2], 3, 1e-6),
+    `the setup must give clearances 0, 5, 3 but gave ${clears}`);
+  assert.ok(clears.every(c => c < GLYPH_CLEAR_GOOD), 'the setup must block every candidate');
+  assert.strictEqual(pickGlyph(cands, everything), cands[1]);
 });
 
 // --- layoutScene --------------------------------------------------------------
@@ -365,7 +370,26 @@ test('layoutScene: no label comes within 4 px of any line, glyph, label or the t
               `${name} label overlaps the triangle's ${l.text} @ ${tag}`);
           }
         }
+        // Everything below is recomputed HERE, from the shapes layoutScene returned, and not
+        // read back from the obstacle lists the layout used. Mutations: dropping the force
+        // arrow, the lever segment, the glyph's edges, or the F label's box from the labels'
+        // obstacle lists each leave lab.clear fine and break one of these.
+        const arrowSeg = { p: lay.arrow.from, q: lay.arrow.to };
+        assert.ok(boxSegDist(box, arrowSeg.p, arrowSeg.q) >= MIN, `${name} label touches the force arrow @ ${tag}`);
+        if (lay.leverSeg && name === 'F') {
+          assert.ok(boxSegDist(box, lay.leverSeg.p, lay.leverSeg.q) >= MIN, `F label touches the lever arm @ ${tag}`);
+        }
+        if (lay.glyph) {
+          const g = lay.glyph;
+          for (const e of [[g.a, g.b], [g.b, g.v], [g.v, g.a]]) {
+            assert.ok(boxSegDist(box, e[0], e[1]) >= MIN, `${name} label touches the triangle @ ${tag}`);
+          }
+        }
       }
+      // the two labels must not overlap each other
+      assert.ok(boxGap(labelBox(lay.forceLabel.x, lay.forceLabel.y, lay.forceLabel.w, lay.forceLabel.anchor),
+                       labelBox(lay.leverLabel.x, lay.leverLabel.y, lay.leverLabel.w, lay.leverLabel.anchor)) >= 2,
+        `the F and r labels overlap @ ${tag}`);
       if (step === 'reveal') reveals++;
     }
   }
