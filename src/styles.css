@@ -52,6 +52,10 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .handle--active .hit { fill: rgba(17, 24, 39, 0.1); }
 .handle--idle, .handle--idle .hit, .handle--idle .dot { cursor: default; pointer-events: none; }
 
+/* the arrows, labels, glyph and torque arc are drawn over the beam; they must not steal its hover.
+   (Handles are circles and the beam is rects, so both stay interactive.) */
+#scene-svg line, #scene-svg text, #scene-svg polygon, #scene-svg path { pointer-events: none; }
+
 /* buttons */
 button {
   font: inherit; font-size: 14px; font-weight: 600;
