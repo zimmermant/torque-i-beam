@@ -46,6 +46,9 @@ test('the lever card quotes |r|, theta_r and r, and says whether r reaches the f
   assert.ok(ok.includes(`2 ${I_HAT} − 0.25 ${J_HAT} m`), ok);
   assert.ok(ok.includes('ends at the force point'));
   assert.ok(ok.includes('class="row ok"'));
+  assert.ok(ok.includes('<span class="k">|r|</span><span class="v">2.02 m</span>'), '|r| row');
+  assert.ok(ok.includes('<span class="k">&theta;<sub>r</sub></span><span class="v">352.87\u00b0</span>'), 'theta_r row');
+  assert.ok(!ok.includes('card--warn'), 'a valid r must not warn');
   const bad = html(build({ x: 1, y: 0 }, { mag: 50, angle: 90 }, { x: -1, y: 0 }, { x: 1.6, y: 0 }));
   assert.ok(bad.includes('not at the force point yet'));
   assert.ok(bad.includes('card--warn'));
@@ -122,8 +125,39 @@ test('the printed arithmetic closes to within 0.03 N.m, and never flips the sign
   assert.ok(worst < 0.03, `printed arithmetic is off by ${worst}`);
 });
 
-// Mutation: computing the verdict word from the rounded printed torque instead
-// of derive() -- impossible to see here unless the panel reads from derive().
+// The panel-level twin of the test above: it reads the numbers the PANEL PRINTS.
+// Mutation: printing the components at 1 decimal, printing them unrounded, or
+// swapping the two products in the worked line each change the printed operands,
+// so the product of what is on screen no longer lands within 0.031 of the printed
+// result. Measured worst case over these 2,304 states: 0.0300 N.m (45 degrees,
+// 19 N, r = (-5, 0.5)); the printed result is itself rounded, which is why this
+// bound is 0.031 and the physics-level one is 0.03.
+test('the arithmetic the panel PRINTS closes to within 0.031 N.m of the result it prints, and never flips the sign', () => {
+  const num = str => Number(str.replace('\u2212', '-'));
+  const CALC = /<div>= \(([^)]*)\)\u00b7\(([^)]*)\) \u2212 \(([^)]*)\)\u00b7\(([^)]*)\)<\/div>/;
+  const RESULT = /<div>= ([^<]*) N\u00b7m<\/div>/;
+  const fps = [{ x: -2.5, y: 0.25 }, { x: 2.5, y: -0.25 }, { x: 0, y: 0 }, { x: 1.25, y: 0.25 }];
+  const pivs = [{ x: 2.5, y: -0.25 }, { x: -2.5, y: 0.25 }, { x: 0, y: 0 }, { x: -1.25, y: -0.25 }, { x: 1.25, y: 0.25 }];
+  let worst = 0, n = 0;
+  for (const dtn of DETENTS) for (const mag of [10, 19, 37, 55, 82, 100]) for (const fp of fps) for (const pv of pivs) {
+    if (fp.x === pv.x && fp.y === pv.y) continue;
+    const s = build(fp, { mag, angle: dtn.angle }, pv, fp, 'cw');
+    const h = panelHtml(s, 'reveal');
+    const calc = CALC.exec(h), result = RESULT.exec(h);
+    assert.ok(calc && result, `could not find the worked line @ ${dtn.angle} ${mag}`);
+    const [rx, fy, ry, fx] = calc.slice(1).map(num);
+    const product = rx * fy - ry * fx, printed = num(result[1]);
+    worst = Math.max(worst, Math.abs(product - printed));
+    if (Math.abs(printed) > 1e-9) assert.strictEqual(Math.sign(product), Math.sign(printed), 'sign flipped');
+    n++;
+  }
+  assert.ok(n > 2000, `the sweep was too small: ${n}`);
+  assert.ok(worst < 0.031, `the printed arithmetic is off by ${worst}`);
+});
+
+// Mutation: printing the result line from anything but fmt(derive().tau) -- for
+// example fmt(tau) of a recomputed or rounded value -- or the F / r vector lines
+// from anything but vecText(derive().F / .r).
 test('the panel, the derive() result and the formatters all quote the same torque', () => {
   for (const ang of [0, 30, 45, 90, 143.13010235415598, 270]) {
     for (const mag of [10, 37, 100]) {
