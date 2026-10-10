@@ -81,6 +81,8 @@ export function createState() {
     const v = f === null ? null : { mag: snapMagnitude(f.mag), angle: snapAngle(f.angle) };
     if (!forcePoint || sameForce(v, force)) return;
     force = v;
+    prediction = null;                 // a changed force invalidates the verdict it was judged against
+    if (v === null) { pivot = null; rTip = null; }   // un-aiming the force leaves nothing downstream to keep
     notify();
   }
 

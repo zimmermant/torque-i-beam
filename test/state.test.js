@@ -247,3 +247,116 @@ test('unsubscribe stops notifications', () => {
   st.setForcePoint({ x: 1, y: 0 });
   assert.strictEqual(n, 1);
 });
+
+// Mutation: deleting the `+ 0` from derive()'s r (both coordinates) leaves -0 - 0 = -0 on the invalid-r path, where the raw tip is not grid-normalised.
+test('derive never returns a negative zero in r, even from a raw -0 tip', () => {
+  const st = createState();
+  st.setForcePoint({ x: 0, y: 1 });
+  st.setForce({ mag: 50, angle: 90 });
+  st.setPivot({ x: 0, y: 0 });
+  st.setRTip({ x: -0, y: -0 });
+  const d = derive(st.getState());
+  assert.ok(!d.rValid, 'the setup must be the invalid-r path');
+  assert.ok(!Object.is(d.r.x, -0), 'r.x is negative zero');
+  assert.ok(!Object.is(d.r.y, -0), 'r.y is negative zero');
+});
+
+// Mutation: dropping `sameForce(v, force)` guard leaves setForce notifying on no-op.
+test('setForce does not notify when the force is unchanged, or snaps to the same force', () => {
+  const st = createState();
+  st.setForcePoint({ x: 1, y: 0 });
+  st.setForce({ mag: 50, angle: T });
+  let n = 0; st.subscribe(() => { n++; });
+  st.setForce({ mag: 50, angle: T });
+  st.setForce({ mag: 50.2, angle: T + 0.5 });
+  assert.strictEqual(n, 0, 'a no-op setForce notified');
+  st.setForce({ mag: 51, angle: T });
+  assert.strictEqual(n, 1);
+});
+
+// Mutation: dropping `samePoint(v, rTip)` guard leaves setRTip notifying on no-op.
+test('setRTip does not notify when the tip is unchanged', () => {
+  const st = createState();
+  st.setForcePoint({ x: 1, y: 0 });
+  st.setForce({ mag: 50, angle: 90 });
+  st.setPivot({ x: -1, y: 0 });
+  st.setRTip({ x: 0.3, y: 0.1 });
+  let n = 0; st.subscribe(() => { n++; });
+  st.setRTip({ x: 0.3, y: 0.1 });
+  assert.strictEqual(n, 0, 'a no-op setRTip notified');
+  st.setRTip({ x: 0.31, y: 0.1 });
+  assert.strictEqual(n, 1);
+});
+
+// Mutation: dropping `p === prediction` guard leaves setPrediction notifying on no-op.
+test('setPrediction does not notify when the answer is unchanged or is not an answer', () => {
+  const st = createState();
+  st.setForcePoint({ x: 1, y: 0 });
+  st.setForce({ mag: 50, angle: 90 });
+  st.setPivot({ x: -1, y: 0 });
+  st.setRTip({ x: 1, y: 0 });
+  st.setPrediction('ccw');
+  let n = 0; st.subscribe(() => { n++; });
+  st.setPrediction('ccw');
+  st.setPrediction('sideways');
+  assert.strictEqual(n, 0, 'a no-op setPrediction notified');
+  st.setPrediction('cw');
+  assert.strictEqual(n, 1);
+});
+
+// Mutation: dropping `&& prediction === null` from setPivot's guard leaves re-pivoting not clearing the prediction.
+test('setPivot: the same grid point is a no-op only when r and the prediction are already as it would leave them', () => {
+  const auto = createState();
+  auto.setForcePoint({ x: 1, y: 0 });
+  auto.setForce({ mag: 50, angle: 90 });
+  auto.setPivot({ x: 1, y: 0 });                       // auto r = 0, no prediction
+  let n = 0; auto.subscribe(() => { n++; });
+  auto.setPivot({ x: 1.04, y: 0.03 });                 // same grid point again
+  assert.strictEqual(n, 0, 'an identical auto-r setPivot notified');
+  auto.setPrediction('zero');
+  assert.strictEqual(n, 1);
+  auto.setPivot({ x: 1, y: 0 });                       // same point, but a prediction exists: it must clear it
+  assert.strictEqual(n, 2, 're-pivoting must notify when it clears a prediction');
+  assert.strictEqual(auto.getState().prediction, null);
+
+  const drawn = createState();
+  drawn.setForcePoint({ x: 1, y: 0 });
+  drawn.setForce({ mag: 50, angle: 90 });
+  drawn.setPivot({ x: -1, y: 0 });
+  drawn.setRTip({ x: 1, y: 0 });
+  let m = 0; drawn.subscribe(() => { m++; });
+  drawn.setPivot({ x: -1, y: 0 });                     // same pivot, but a drawn r: re-pivoting clears it
+  assert.strictEqual(m, 1);
+  assert.strictEqual(drawn.getState().rTip, null);
+});
+
+// Mutation: dropping `prediction = null` leaves a prediction judged against a force that no longer exists.
+test('changing the force clears the prediction but keeps the pivot and r', () => {
+  const st = createState();
+  st.setForcePoint({ x: 1, y: 0 });
+  st.setForce({ mag: 50, angle: 90 });
+  st.setPivot({ x: -1, y: 0 });
+  st.setRTip({ x: 1, y: 0 });
+  st.setPrediction('ccw');
+  st.setForce({ mag: 60, angle: 90 });
+  const s = st.getState();
+  assert.strictEqual(s.prediction, null);
+  assert.deepStrictEqual(s.pivot, { x: -1, y: 0 });
+  assert.deepStrictEqual(s.rTip, { x: 1, y: 0 });
+  assert.deepStrictEqual(s.force, { mag: 60, angle: 90 });
+});
+
+// Mutation: dropping the `v === null` clear leaves a pivot and r with no force, and a prediction that is still accepted.
+test('un-aiming the force clears the pivot, r and prediction, so nothing downstream can outlive it', () => {
+  const st = createState();
+  st.setForcePoint({ x: 1, y: 0 });
+  st.setForce({ mag: 50, angle: 90 });
+  st.setPivot({ x: -1, y: 0 });
+  st.setRTip({ x: 1, y: 0 });
+  st.setPrediction('ccw');
+  st.setForce(null);
+  assert.deepStrictEqual(st.getState(),
+    { forcePoint: { x: 1, y: 0 }, force: null, pivot: null, rTip: null, prediction: null });
+  st.setPrediction('cw');
+  assert.strictEqual(st.getState().prediction, null);
+});
