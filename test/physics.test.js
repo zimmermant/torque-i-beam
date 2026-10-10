@@ -57,6 +57,7 @@ test('snapMagnitude rounds to whole newtons and clamps to 10..100', () => {
 
 // Mutation: using raw Math.cos/Math.sin at 90 makes x = 3.06e-15, which is
 // !== 0.
+// Mutation: deleting the trailing "+ 0" in components() leaves -1 * 0 = -0 at 180 and 270 degrees.
 test('components are EXACT at the axes', () => {
   assert.deepStrictEqual(components(50, 0),   { x: 50, y: 0 });
   assert.deepStrictEqual(components(50, 90),  { x: 0, y: 50 });
@@ -65,6 +66,12 @@ test('components are EXACT at the axes', () => {
   for (const a of [0, 90, 180, 270]) {
     const c = components(37, a);
     assert.ok(!Object.is(c.x, -0) && !Object.is(c.y, -0), `negative zero at ${a}`);
+  }
+  for (const a of [0, 90, 180, 270]) {
+    const c = components(0, a);
+    assert.ok(!Object.is(c.x, -0) && !Object.is(c.y, -0), `negative zero at ${a} with mag 0`);
+    assert.deepStrictEqual(c.x, 0);
+    assert.deepStrictEqual(c.y, 0);
   }
 });
 
