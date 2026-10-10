@@ -59,6 +59,10 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .handle--active .hit { fill: rgba(17, 24, 39, 0.1); }
 .handle--idle, .handle--idle .hit, .handle--idle .dot { cursor: default; pointer-events: none; }
 
+/* the arrows, labels, glyph and torque arc are drawn over the beam; they must not steal its hover.
+   (Handles are circles and the beam is rects, so both stay interactive.) */
+#scene-svg line, #scene-svg text, #scene-svg polygon, #scene-svg path { pointer-events: none; }
+
 /* buttons */
 button {
   font: inherit; font-size: 14px; font-weight: 600;
@@ -343,10 +347,12 @@ function clientToSvg(svg, clientX, clientY) {
 // ===== geometry.js =====
 
 
-// Everything that knows the beam's SHAPE, and the only place the y axis is
-// flipped. Every other module works in world coordinates: metres, y up, origin
-// at the beam's centre. Every constant below was checked by the sweeps in
-// test/geometry.test.js and test/scene.test.js.
+// Everything that knows the beam's SHAPE, and the world <-> screen conversion
+// (toPx / toWorld), where the y axis is flipped. Every other module works in
+// world coordinates: metres, y up, origin at the beam's centre. (A few drawing
+// helpers in scene.js -- arrowPx, tripleGlyph, torqueArc -- also work in screen
+// coordinates and flip y themselves.) Every constant below was checked by the sweeps
+// in test/geometry.test.js and test/scene.test.js.
 const VB = { w: 960, h: 560 };
 const PX_PER_M = 100;
 const ORIGIN_PX = { x: 480, y: 280 };
@@ -410,11 +416,16 @@ function aimFromPointer(forcePoint, world) {
   };
 }
 
-// The dragged tip of r, or null if the drag is too short to count.
+// The dragged tip of r, or null if the drag is too short to count. Pointer
+// capture keeps delivering moves outside the svg, so the pointer is first
+// clamped to the viewBox inset by 12 px: the tip (and the handle on it) always
+// stays where it can be seen and grabbed.
 function leverTipFromPointer(pivot, world) {
-  const distPx = Math.hypot(world.x - pivot.x, world.y - pivot.y) * PX_PER_M;
+  const lo = toWorld({ x: 12, y: VB.h - 12 }), hi = toWorld({ x: VB.w - 12, y: 12 });
+  const w = { x: clampTo(world.x, lo.x, hi.x), y: clampTo(world.y, lo.y, hi.y) };
+  const distPx = Math.hypot(w.x - pivot.x, w.y - pivot.y) * PX_PER_M;
   if (distPx < R_DRAG_MIN_PX) return null;
-  return { x: world.x, y: world.y };
+  return { x: w.x, y: w.y };
 }
 
 // ===== state.js =====
@@ -634,6 +645,34 @@ function instruction(step, s) {
     default:
       return '';
   }
+}
+
+// Which controls are enabled, marked or hidden, for this state on this step. Pure, so every
+// rule is tested; app.js only applies the fields.
+//   - the three answers can be pressed only in the predict step;
+//   - the picked answer is selected, and right or wrong once the torque is known;
+//   - Back and New problem do nothing on an empty board, so they are disabled there;
+//   - 'Same force, new pivot' exists only in the reveal; Replay too, but a zero torque has
+//     no swing to replay, so there it stays hidden.
+function controlsView(s, step) {
+  const d = derive(s);
+  const answers = {};
+  for (const key of PREDICTIONS) {
+    const picked = s.prediction === key;
+    answers[key] = {
+      disabled: step !== 'predict',
+      selected: picked,
+      right: picked && d.correct === true,
+      wrong: picked && d.correct === false
+    };
+  }
+  return {
+    answers,
+    backDisabled: !s.forcePoint,
+    newProblemDisabled: !s.forcePoint,
+    replayHidden: step !== 'reveal' || d.truth === 'zero',
+    sameForceHidden: step !== 'reveal'
+  };
 }
 
 // ===== panel.js =====
@@ -1246,8 +1285,10 @@ function createInteraction(svg, state, hooks) {
     if (!drag || e.pointerId !== dragPointerId) return;
     const world = toWorld(clientToSvg(svg, e.clientX, e.clientY));
     const s = state.getState();
-    if (drag === 'force') state.setForce(aimFromPointer(s.forcePoint, world));
-    else state.setRTip(leverTipFromPointer(s.pivot, world));
+    // New problem or Back (a second finger, or the keyboard) can empty the state mid-drag;
+    // a move then has nothing to steer, and must not throw on the missing point.
+    if (drag === 'force') { if (s.forcePoint) state.setForce(aimFromPointer(s.forcePoint, world)); }
+    else if (s.pivot) { state.setRTip(leverTipFromPointer(s.pivot, world)); }
   });
 
   svg.addEventListener('pointerup', endDrag);
@@ -1297,10 +1338,10 @@ const stepItems = STEPS.map(key => {
 
 function renderAll(s) {
   const step = deriveStep(s, drag);
-  const d = derive(s);
   scene.render(s, { step, drag });
   panel.render(s, step);
-  els.instruction.textContent = instruction(step, s);
+  const t = instruction(step, s);                     // inside an aria-live region: only touch it when it changes
+  if (els.instruction.textContent !== t) els.instruction.textContent = t;
 
   const at = STEPS.indexOf(step);
   stepItems.forEach((li, i) => {
@@ -1308,19 +1349,19 @@ function renderAll(s) {
     if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
   });
 
+  const v = controlsView(s, step);
   for (const b of els.answers) {
-    const picked = s.prediction === b.dataset.answer;
-    b.disabled = step !== 'predict';
-    b.classList.toggle('is-selected', picked);
-    b.classList.toggle('is-right', picked && d.correct === true);
-    b.classList.toggle('is-wrong', picked && d.correct === false);
-    b.setAttribute('aria-pressed', String(picked));
+    const a = v.answers[b.dataset.answer];
+    b.disabled = a.disabled;
+    b.classList.toggle('is-selected', a.selected);
+    b.classList.toggle('is-right', a.right);
+    b.classList.toggle('is-wrong', a.wrong);
+    b.setAttribute('aria-pressed', String(a.selected));
   }
-  const empty = !s.forcePoint;
-  els.back.disabled = empty;
-  els.newProblem.disabled = empty;
-  els.replay.hidden = step !== 'reveal';
-  els.sameForce.hidden = step !== 'reveal';
+  els.back.disabled = v.backDisabled;
+  els.newProblem.disabled = v.newProblemDisabled;
+  els.replay.hidden = v.replayHidden;
+  els.sameForce.hidden = v.sameForceHidden;
 }
 
 for (const b of els.answers) b.addEventListener('click', () => state.setPrediction(b.dataset.answer));
