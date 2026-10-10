@@ -150,6 +150,8 @@ const MUTATIONS = [
     "return d.r.x === 0 && d.r.y === 0\n        ?", "return !(d.r.x === 0 && d.r.y === 0)\n        ?"],
   ['steps.js', 'the aim instruction loses its second sentence',
     ' It snaps to common angles.', ''],
+  ['panel.js', 'the worked line prints the F_y operand unrounded',
+    '${parenthesized(d.F.y)} −', '(${d.F.y}) −'],
   ['state.js', 'a fresh state starts with a pivot at the centre of the beam',
     'let pivot = null;', 'let pivot = { x: 0, y: 0 };'],
   ['state.js', 'setForce stores the raw magnitude instead of whole newtons',

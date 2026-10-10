@@ -32,12 +32,14 @@ To check the real page, serve the repo root (`python3 -m http.server 8742 --bind
 |---|---|
 | `physics.js` | The 24 detents, snapping, exact components, `torqueZ`, `classify`. |
 | `format.js` | The only place a number is rounded for display. |
-| `geometry.js` | The beam, the 0.25 m grid, the only y flip, hit-testing. |
+| `svg.js` | `el` / `clear` / `text` / `clientToSvg`, and the colour palette. |
+| `geometry.js` | The beam, the 0.25 m grid, the world <-> screen conversion (`toPx` / `toWorld`, where y is flipped), hit-testing. A few drawing helpers in `scene.js` (`arrowPx`, `tripleGlyph`, `torqueArc`) also work in screen coordinates and flip y themselves. |
 | `state.js` | Five stored inputs; everything else is `derive()`d. |
-| `steps.js` | The current step and its instruction, derived from the data. |
+| `steps.js` | The current step, its instruction, and `controlsView` (which controls are enabled, marked or hidden), derived from the data. |
 | `panel.js` | The side panel, as a pure string. |
 | `scene.js` | A pure `layoutScene`, the SVG drawing, and the swing. |
 | `interact.js` | Pointer handling. `decidePress` is pure. |
+| `app.js` | The wiring: builds the state, scene, panel and pointer handling, and applies `controlsView` on every change. Verified in the browser. |
 
 ## Rules this codebase keeps
 

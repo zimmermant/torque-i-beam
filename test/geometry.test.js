@@ -139,7 +139,7 @@ test('the 6 px short-drag rule is applied to the clamped point', () => {
   assert.strictEqual(leverTipFromPointer({ x: 1, y: 0 }, { x: 1.05, y: 0 }), null);
 });
 
-// Mutation: HIT_MARGIN_M = 0 rejects a press 3 px outside the beam's top edge,
+// Mutation: HIT_MARGIN_M = 0 rejects a press 4 px outside the beam's top edge,
 // and any pointer noise on the edge rows (y = +/-0.25) itself.
 test('hitBeam forgives a press within 5 px of the beam, and not beyond', () => {
   assert.ok(hitBeam({ x: 0, y: 0.25 + 1e-12 }), 'float noise on the top edge');

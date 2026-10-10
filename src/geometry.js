@@ -1,9 +1,11 @@
 import { DEG, snapAngle, snapMagnitude } from './physics.js';
 
-// Everything that knows the beam's SHAPE, and the only place the y axis is
-// flipped. Every other module works in world coordinates: metres, y up, origin
-// at the beam's centre. Every constant below was checked by the sweeps in
-// test/geometry.test.js and test/scene.test.js.
+// Everything that knows the beam's SHAPE, and the world <-> screen conversion
+// (toPx / toWorld), where the y axis is flipped. Every other module works in
+// world coordinates: metres, y up, origin at the beam's centre. (A few drawing
+// helpers in scene.js -- arrowPx, tripleGlyph, torqueArc -- also work in screen
+// coordinates and flip y themselves.) Every constant below was checked by the sweeps
+// in test/geometry.test.js and test/scene.test.js.
 export const VB = { w: 960, h: 560 };
 export const PX_PER_M = 100;
 export const ORIGIN_PX = { x: 480, y: 280 };

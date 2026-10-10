@@ -145,6 +145,7 @@ test('the arithmetic the panel PRINTS closes to within 0.031 N.m of the result i
     const h = panelHtml(s, 'reveal');
     const calc = CALC.exec(h), result = RESULT.exec(h);
     assert.ok(calc && result, `could not find the worked line @ ${dtn.angle} ${mag}`);
+    for (const str of calc.slice(1)) assert.match(str, /^[\u2212-]?\d+(\.\d{1,2})?$/, `an operand is not rounded to two decimals @ ${dtn.angle} ${mag}: ${str}`);
     const [rx, fy, ry, fx] = calc.slice(1).map(num);
     const product = rx * fy - ry * fx, printed = num(result[1]);
     worst = Math.max(worst, Math.abs(product - printed));

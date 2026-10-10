@@ -8,9 +8,10 @@ Executed `docs/superpowers/plans/2026-10-10-torque-i-beam.md` on branch `feat/in
 
 - **136 tests** (the plan said 125; review rounds added 11: state +7, panel +1, interact +3), all passing.
 - **108 mutation rows** in `tools/mutations.mjs`; `node tools/mutations.mjs --coverage --strict` reports **136 of 136 tests are made to fail by at least one mutation**, exit 0. (A full run takes about 10 minutes.)
-- `dist/torque_i_beam.html`, **50,046 bytes**, byte-reproducible (the plan said 49,542; Task 5's review added 2 lines to `state.js`).
+- `dist/torque_i_beam.html`, **50,096 bytes on disk** (build.js reports 50,046, which counts UTF-16 code units), byte-reproducible (the plan said 49,542; Task 5's review added 2 lines to `state.js`).
 - Browser sweeps at the verified scene scale (646 px wide, viewport 1024x768): **1,080** force states, **5,040** states with a lever arm (all 5,040 valid, 0 missed), **864** revealed states: **zero** label/hit violations; the rotated beam stays at least 101.7 px inside the panel.
 - Real-mouse checks (below): all pass.
+- **What the tests do not reach:** `src/app.js` wiring and `scene.js`'s `draw()` and swing animation are verified only in the browser (everything else has unit tests), except `renderAll`'s control state, which is now covered through the pure `controlsView`.
 - The full SDD ledger, with every ruling and deferred minor, is committed at `docs/superpowers/sdd-ledger-torque-i-beam.md`; the mutation audit report and the raw coverage run are `docs/superpowers/mutation-audit-report.md` and `docs/superpowers/mutation-coverage-run.txt`.
 - **Not merged and not published.** Both need the user's explicit go-ahead.
 

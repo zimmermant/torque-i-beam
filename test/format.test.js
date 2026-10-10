@@ -12,7 +12,9 @@ test('fmt trims zeros, uses a true minus sign, and never prints negative zero', 
   assert.strictEqual(fmt(-0.001), '0');
   assert.strictEqual(fmt(0.004), '0');
   assert.strictEqual(fmt(53.13010235415598), '53.13');
-  assert.strictEqual(fmt(2.675), '2.67');          // toFixed, not Math.round: documented
+  // 2.675 is stored as 2.67499999999999982..., just under the half, so it prints 2.67. (Math.round
+  // would also give 2.67 here: this documents the rounding, it does not tell toFixed from Math.round.)
+  assert.strictEqual(fmt(2.675), '2.67');
   assert.ok(!fmt(-0.0049).includes('-') && !fmt(-0.0049).includes('−'));
 });
 
