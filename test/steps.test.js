@@ -148,3 +148,22 @@ test('controlsView: Replay is shown in the reveal for a torque, and never when t
   assert.strictEqual(controlsView(zero, 'reveal').sameForceHidden, false, 'a new pivot is still on offer');
   assert.deepStrictEqual(flags(controlsView(zero, 'reveal').answers.zero), { selected: true, right: true, wrong: false });
 });
+
+// Mutations: removing the `s.rTip &&` guard (every student would read "r should end where the force
+// acts" before drawing anything); swapping the two predict branches; changing the aim text.
+test('every instruction reads exactly as written', () => {
+  const place = stateFor('place'), aim = stateFor('aim'), pivot = stateFor('pivot'), draw = stateFor('draw');
+  assert.strictEqual(instruction('place', place), 'Click the beam where the force acts.');
+  assert.strictEqual(instruction('aim', aim), 'Drag away from that point to set the force\u2019s direction and size. It snaps to common angles.');
+  assert.strictEqual(instruction('pivot', pivot), 'Click the beam to choose the pivot.');
+  // first visit to the draw step: a pivot, no r yet
+  assert.strictEqual(draw.rTip, null);
+  assert.strictEqual(instruction('draw', draw), 'Drag from the pivot to the force point to draw the lever arm r.');
+  // an r whose tip missed the force point
+  const bad = at(st => { st.setForcePoint({ x: 1, y: 0 }); st.setForce({ mag: 40, angle: 90 }); st.setPivot({ x: 0, y: 0 }); st.setRTip({ x: 1.6, y: 0 }); });
+  assert.strictEqual(instruction('draw', bad), 'r should end where the force acts \u2014 drag its tip onto the force point.');
+  // predict: a real r, and the pivot on the force point (r = 0)
+  assert.strictEqual(instruction('predict', stateFor('predict')), 'Will the beam turn clockwise (\u2212), counterclockwise (+), or not at all?');
+  const r0 = at(st => { st.setForcePoint({ x: 1, y: 0 }); st.setForce({ mag: 40, angle: 90 }); st.setPivot({ x: 1, y: 0 }); });
+  assert.strictEqual(instruction('predict', r0), 'The pivot is at the force point, so r = 0 and \u03c4 = 0. Predict the rotation.');
+});
