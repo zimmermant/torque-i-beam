@@ -1,5 +1,5 @@
-import { createState, derive } from './state.js';
-import { STEPS, STEP_LABELS, deriveStep, instruction } from './steps.js';
+import { createState } from './state.js';
+import { STEPS, STEP_LABELS, deriveStep, instruction, controlsView } from './steps.js';
 import { createScene } from './scene.js';
 import { createPanel } from './panel.js';
 import { createInteraction } from './interact.js';
@@ -37,10 +37,10 @@ const stepItems = STEPS.map(key => {
 
 function renderAll(s) {
   const step = deriveStep(s, drag);
-  const d = derive(s);
   scene.render(s, { step, drag });
   panel.render(s, step);
-  els.instruction.textContent = instruction(step, s);
+  const t = instruction(step, s);                     // inside an aria-live region: only touch it when it changes
+  if (els.instruction.textContent !== t) els.instruction.textContent = t;
 
   const at = STEPS.indexOf(step);
   stepItems.forEach((li, i) => {
@@ -48,19 +48,19 @@ function renderAll(s) {
     if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
   });
 
+  const v = controlsView(s, step);
   for (const b of els.answers) {
-    const picked = s.prediction === b.dataset.answer;
-    b.disabled = step !== 'predict';
-    b.classList.toggle('is-selected', picked);
-    b.classList.toggle('is-right', picked && d.correct === true);
-    b.classList.toggle('is-wrong', picked && d.correct === false);
-    b.setAttribute('aria-pressed', String(picked));
+    const a = v.answers[b.dataset.answer];
+    b.disabled = a.disabled;
+    b.classList.toggle('is-selected', a.selected);
+    b.classList.toggle('is-right', a.right);
+    b.classList.toggle('is-wrong', a.wrong);
+    b.setAttribute('aria-pressed', String(a.selected));
   }
-  const empty = !s.forcePoint;
-  els.back.disabled = empty;
-  els.newProblem.disabled = empty;
-  els.replay.hidden = step !== 'reveal';
-  els.sameForce.hidden = step !== 'reveal';
+  els.back.disabled = v.backDisabled;
+  els.newProblem.disabled = v.newProblemDisabled;
+  els.replay.hidden = v.replayHidden;
+  els.sameForce.hidden = v.sameForceHidden;
 }
 
 for (const b of els.answers) b.addEventListener('click', () => state.setPrediction(b.dataset.answer));

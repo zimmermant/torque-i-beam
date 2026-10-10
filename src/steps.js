@@ -1,4 +1,4 @@
-import { derive } from './state.js';
+import { derive, PREDICTIONS } from './state.js';
 import { fmt } from './format.js';
 
 export const STEPS = ['place', 'aim', 'pivot', 'draw', 'predict', 'reveal'];
@@ -49,4 +49,32 @@ export function instruction(step, s) {
     default:
       return '';
   }
+}
+
+// Which controls are enabled, marked or hidden, for this state on this step. Pure, so every
+// rule is tested; app.js only applies the fields.
+//   - the three answers can be pressed only in the predict step;
+//   - the picked answer is selected, and right or wrong once the torque is known;
+//   - Back and New problem do nothing on an empty board, so they are disabled there;
+//   - 'Same force, new pivot' exists only in the reveal; Replay too, but a zero torque has
+//     no swing to replay, so there it stays hidden.
+export function controlsView(s, step) {
+  const d = derive(s);
+  const answers = {};
+  for (const key of PREDICTIONS) {
+    const picked = s.prediction === key;
+    answers[key] = {
+      disabled: step !== 'predict',
+      selected: picked,
+      right: picked && d.correct === true,
+      wrong: picked && d.correct === false
+    };
+  }
+  return {
+    answers,
+    backDisabled: !s.forcePoint,
+    newProblemDisabled: !s.forcePoint,
+    replayHidden: step !== 'reveal' || d.truth === 'zero',
+    sameForceHidden: step !== 'reveal'
+  };
 }
