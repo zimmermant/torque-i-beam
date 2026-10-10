@@ -1,0 +1,14 @@
+# No tokens, passwords, secrets or keys belong in this repo. Be explicit.
+.env
+.env.*
+*.pem
+*.key
+*secret*
+*token*
+*credential*
+*password*
+node_modules/
+.DS_Store
+.superpowers/
+.code-review-graph/
+.claude/
