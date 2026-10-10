@@ -1,7 +1,8 @@
 // Browser verification harness. Load it into the built page, then run the phases:
 //
+//   (first set the Browser pane to a 1024x768 viewport: the scene must render ~646 px wide)
 //   eval(await (await fetch('/tools/browser-harness.js')).text());
-//   H.install();            // once per page load
+//   H.install();            // once per page load; refuses to run if the scene is under 600 px wide
 //   H.phase1();  H.phase2();  H.phase3();
 //
 // It drives the REAL pointer handlers with synthetic events (pointer capture is
@@ -45,7 +46,17 @@
   const instr = () => document.getElementById('instruction').textContent;
   const tipOf = (fp, a, mag) => ({ x: fp.x + mag * 1.6 / 100 * Math.cos(a * D), y: fp.y + mag * 1.6 / 100 * Math.sin(a * D) });
 
+  // Label measurements come from getBBox, whose text metrics depend on the rendered scale.
+  // At 208 px wide (a collapsed pane) the same build showed 24 and 75 'violations' that
+  // vanished at the verified 646 px; below ~600 px the numbers are not trustworthy.
+  const MIN_SCENE_PX = 600;
+
   function install() {
+    const width = rect().width;
+    if (width < MIN_SCENE_PX) {
+      throw new Error(`The scene is only ${Math.round(width)} px wide: label measurements are unreliable below ` +
+        `${MIN_SCENE_PX} px. Set the Browser pane to a 1024x768 viewport first (resize_window width 1024, height 768) and reload.`);
+    }
     Element.prototype.setPointerCapture = function () {};
     Element.prototype.releasePointerCapture = function () {};
     Element.prototype.hasPointerCapture = function () { return true; };

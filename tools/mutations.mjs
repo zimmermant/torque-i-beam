@@ -12,7 +12,7 @@
 //   - no test FILE may fail to load (same reason);
 //   - it may fail at most MAX_FAILING tests (a blunt mutation that breaks everything covers
 //     every test and proves nothing).
-// A row's file is a src/ file name, or 'build.js' for the build script.
+// A row's file is a src/ file name (JavaScript, or index.template.html), or 'build.js'.
 //
 // The source file is always restored, even if a run throws.
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
@@ -233,7 +233,14 @@ const MUTATIONS = [
   ['build.js', 'name scanning also registers indented function-locals',
     'const DECL = /^(?:export', 'const DECL = /^\\s*(?:export'],
   ['build.js', 'the output is stamped with a random build id',
-    "writeFileSync(join(dir, 'torque_i_beam.html'), html);", "writeFileSync(join(dir, 'torque_i_beam.html'), html + '<!-- build ' + Math.random() + ' -->');"]
+    "writeFileSync(join(dir, 'torque_i_beam.html'), html);", "writeFileSync(join(dir, 'torque_i_beam.html'), html + '<!-- build ' + Math.random() + ' -->');"],
+  // --- template.test.js: literal text in src/index.template.html (the parse check does not apply)
+  ['index.template.html', 'the clockwise answer says "-" instead of the minus sign',
+    'Clockwise (&minus;)', 'Clockwise (-)'],
+  ['index.template.html', 'the Replay button is not hidden at the start',
+    'id="replay" hidden', 'id="replay"'],
+  ['index.template.html', 'the stylesheet is linked externally instead of inlined',
+    '<!--INLINE_CSS-->', '<link rel="stylesheet" href="styles.css">']
 ];
 
 const TEST_FILES = readdirSync(join(root, 'test')).filter(f => f.endsWith('.test.js')).sort();
@@ -272,8 +279,12 @@ for (const [file, what, find, replace] of MUTATIONS) {
   if (original.replace(find, replace) === original) { console.log(`?? NO-OP         ${file}: ${what}  (the replacement changes nothing)`); bad++; continue; }
   try {
     writeFileSync(path, original.replace(find, replace));
-    const parse = spawnSync(process.execPath, ['--check', path], { encoding: 'utf8' });
-    if (parse.status !== 0) { console.log(`?? DOES NOT PARSE ${file}: ${what}`); bad++; continue; }
+    // Only JavaScript can be syntax-checked; a mutated HTML template is checked by the tests
+    // that read it, and by the file-level-failure guard below.
+    if (/\.(m?js)$/.test(file)) {
+      const parse = spawnSync(process.execPath, ['--check', path], { encoding: 'utf8' });
+      if (parse.status !== 0) { console.log(`?? DOES NOT PARSE ${file}: ${what}`); bad++; continue; }
+    }
     const { failing } = await runSuite();
     const fileLevel = failing.filter(id => / :: test\/.*\.test\.js$/.test(id));
     if (fileLevel.length) { console.log(`?? BREAKS LOADING ${file}: ${what}  (${fileLevel.join(', ')})`); bad++; continue; }
