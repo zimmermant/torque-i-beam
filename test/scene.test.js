@@ -91,6 +91,34 @@ test('every 3-4-5 glyph has a 40px hypotenuse parallel to its arrow and legs in 
   }
 });
 
+// Which leg does each digit label? A digit beside the wrong leg is a wrong picture: the 4 on the
+// 3-unit leg. Measured from the triangle's own vertices, not from the code that places the labels.
+// Mutation: swapping the leg midpoints (hm / vm) that position the run and rise digits; moving the
+// hypotenuse label onto a leg.
+test('each 3-4-5 digit sits beside its own leg: run by the horizontal leg, rise by the vertical, hyp by the hypotenuse', () => {
+  const mid = (p, q) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+  const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+  for (const d of triples) for (const mag of [10, 50, 100]) for (const flip of [false, true]) {
+    const { from, to } = arrowPx({ x: 0.5, y: 0.25 }, components(mag, d.angle));
+    const g = tripleGlyph(from, to, d, { flip });
+    const edges = [[g.a, g.b], [g.b, g.v], [g.v, g.a]];
+    const where = `${d.angle} deg, ${mag} N, flip ${flip}`;
+    const hLegs = edges.filter(([p, q]) => near(p.y, q.y) && !near(p.x, q.x));
+    const vLegs = edges.filter(([p, q]) => near(p.x, q.x) && !near(p.y, q.y));
+    assert.strictEqual(hLegs.length, 1, `one horizontal leg at ${where}`);
+    assert.strictEqual(vLegs.length, 1, `one vertical leg at ${where}`);
+    const hm = mid(...hLegs[0]), vm = mid(...vLegs[0]), ym = mid(g.a, g.b);
+    // the horizontal leg is the run, the vertical leg is the rise
+    assert.ok(near(Math.abs(hLegs[0][0].x - hLegs[0][1].x) / Math.abs(vLegs[0][0].y - vLegs[0][1].y), d.run / d.rise), `leg ratio at ${where}`);
+    const label = text => g.labels.find(l => l.text === text);
+    const run = label(String(d.run)), rise = label(String(d.rise)), hyp = label(String(d.hyp));
+    assert.ok(run && rise && hyp, `three labels at ${where}`);
+    assert.ok(dist(run, hm) < dist(run, vm), `the ${d.run} is not beside the horizontal leg at ${where}`);
+    assert.ok(dist(rise, vm) < dist(rise, hm), `the ${d.rise} is not beside the vertical leg at ${where}`);
+    assert.ok(dist(hyp, ym) < dist(hyp, hm) && dist(hyp, ym) < dist(hyp, vm), `the ${d.hyp} is not beside the hypotenuse at ${where}`);
+  }
+});
+
 test('the glyph sits on the side of the arrow away from the beam, and clear of the arrow', () => {
   for (const d of triples) {
     const F = components(50, d.angle);
