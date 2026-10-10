@@ -48,6 +48,10 @@ export function createInteraction(svg, state, hooks) {
 
   svg.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;                       // right and middle clicks never drag
+    // A second finger must not take over a drag already in progress, nor reach the auto-r
+    // branch below (which clears dragPointerId and would strand `drag`). The SAME pointer
+    // pressing again simply starts afresh.
+    if (drag !== null && e.pointerId !== dragPointerId) return;
     const handleEl = e.target.closest ? e.target.closest('[data-h]') : null;
     const world = toWorld(clientToSvg(svg, e.clientX, e.clientY));
     const step = deriveStep(state.getState(), drag);

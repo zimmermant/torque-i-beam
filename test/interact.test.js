@@ -223,3 +223,45 @@ test('a move from some OTHER pointer does not steer the drag', () => {
   r.fire('pointerup', { x: 1, y: 0 }, { pointerId: 2 });
   assert.strictEqual(r.it.getDrag(), 'force', 'another pointer cannot end it either');
 });
+
+// Mutation: deleting the `drag !== null && e.pointerId !== dragPointerId` guard in pointerdown
+// lets a second pointer's press take the drag over: it moves the force point, takes capture,
+// and overwrites dragPointerId, so pointer 1's moves and release are then ignored.
+test('a second pointer pressing the beam mid-drag cannot take the drag over', () => {
+  const r = rig();
+  r.fire('pointerdown', { x: 1, y: 0 });                          // pointer 1 starts aiming
+  r.fire('pointerdown', { x: -1, y: 0.25 }, { pointerId: 2 });    // a second finger lands on the beam
+  assert.strictEqual(r.svg.captureCalls, 1, 'the second press must not even take capture');
+  assert.deepStrictEqual(r.state.getState().forcePoint, { x: 1, y: 0 }, 'the second press moved the force point');
+  r.fire('pointermove', { x: 1, y: 0.8 });                        // pointer 1 is still in charge
+  assert.deepStrictEqual(r.state.getState().force, { mag: 50, angle: 90 });
+  r.fire('pointerup', { x: 1, y: 0.8 });
+  assert.strictEqual(r.it.getDrag(), null);
+});
+
+// Mutation: the same guard. Without it, a second press on the force point's own grid cell takes
+// the auto-r branch, which releases capture and returns with `drag` still 'r' and dragPointerId
+// null: pointer 1's release is then ignored and the drag is stranded.
+test('a second pointer pressing the force point mid-r-drag cannot strand the drag', () => {
+  const r = rig();
+  throughForce(r);
+  r.fire('pointerdown', { x: -1, y: 0 });                         // pointer 1 starts drawing r
+  assert.strictEqual(r.it.getDrag(), 'r');
+  r.fire('pointerdown', { x: 1, y: 0 }, { pointerId: 2 });        // pointer 2 presses the force point's cell
+  assert.strictEqual(r.it.getDrag(), 'r', 'the first drag is still live');
+  assert.ok(r.svg.held.has(1), "pointer 1's capture must survive");
+  r.fire('pointermove', { x: 1, y: 0 });
+  r.fire('pointerup', { x: 1, y: 0 });
+  assert.strictEqual(r.it.getDrag(), null, 'the drag must end when pointer 1 lifts');
+  assert.strictEqual(deriveStep(r.state.getState(), null), 'predict');
+});
+
+// The same pointer pressing again is NOT a second finger: it starts afresh.
+test('the same pointer pressing again while a drag is live starts afresh', () => {
+  const r = rig();
+  r.fire('pointerdown', { x: 1, y: 0 });
+  r.fire('pointerdown', { x: -1, y: 0.25 });                      // same pointer id (1)
+  assert.deepStrictEqual(r.state.getState().forcePoint, { x: -1, y: 0.25 });
+  r.fire('pointerup', { x: -1, y: 0.25 });
+  assert.strictEqual(r.it.getDrag(), null);
+});
