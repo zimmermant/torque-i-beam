@@ -29,7 +29,7 @@ export function instruction(step, s) {
     case 'place':
       return 'Click the beam where the force acts.';
     case 'aim':
-      return 'Drag away from that point to set the force\'s direction and size. It snaps to common angles.';
+      return 'Drag away from that point to set the force’s direction and size. It snaps to common angles.';
     case 'pivot':
       return 'Click the beam to choose the pivot.';
     case 'draw':
