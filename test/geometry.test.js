@@ -110,6 +110,35 @@ test('leverTipFromPointer ignores a drag shorter than 6 px', () => {
   assert.deepStrictEqual(leverTipFromPointer(pivot, { x: 1.06, y: 0 }), { x: 1.06, y: 0 });
 });
 
+// Mutation: dropping the clamp in leverTipFromPointer lets the tip, and the handle the
+// instruction tells the student to drag, end up off the canvas.
+test('leverTipFromPointer clamps the tip to the viewBox inset by 12 px', () => {
+  const pivot = { x: -1, y: 0 };
+  const lo = toWorld({ x: 12, y: VB.h - 12 }), hi = toWorld({ x: VB.w - 12, y: 12 });
+  assert.ok(lo.y < hi.y && lo.x < hi.x, 'toWorld flips y, so lo is the bottom-left corner');
+  const up = leverTipFromPointer(pivot, { x: 0, y: 5 });
+  assert.ok(up.y <= hi.y + 1e-9, `y ${up.y} above the top limit ${hi.y}`);
+  assert.ok(near(up.y, hi.y) && near(up.x, 0));
+  const px = toPx(up);
+  assert.ok(px.x >= 12 && px.x <= VB.w - 12 && px.y >= 12 && px.y <= VB.h - 12, 'inside the viewBox');
+  const down = leverTipFromPointer(pivot, { x: 0, y: -9 });
+  assert.ok(near(down.y, lo.y) && toPx(down).y <= VB.h - 12 + 1e-9);
+  const right = leverTipFromPointer(pivot, { x: 99, y: 0 });
+  assert.ok(near(right.x, hi.x) && near(right.y, 0), 'x clamped on the right');
+  const left = leverTipFromPointer(pivot, { x: -99, y: 0 });
+  assert.ok(near(left.x, lo.x), 'x clamped on the left');
+  // A normal in-canvas tip is returned unchanged.
+  assert.deepStrictEqual(leverTipFromPointer(pivot, { x: 1.5, y: 0.25 }), { x: 1.5, y: 0.25 });
+  assert.deepStrictEqual(leverTipFromPointer(pivot, { x: -2.5, y: -0.25 }), { x: -2.5, y: -0.25 });
+});
+
+test('the 6 px short-drag rule is applied to the clamped point', () => {
+  const hi = toWorld({ x: VB.w - 12, y: 12 });
+  const edge = { x: hi.x - 0.02, y: 0 };                               // a pivot 2 px inside the clamp limit
+  assert.strictEqual(leverTipFromPointer(edge, { x: hi.x + 0.5, y: 0 }), null, 'clamped to 2 px from the pivot: too short');
+  assert.strictEqual(leverTipFromPointer({ x: 1, y: 0 }, { x: 1.05, y: 0 }), null);
+});
+
 // Mutation: HIT_MARGIN_M = 0 rejects a press 3 px outside the beam's top edge,
 // and any pointer noise on the edge rows (y = +/-0.25) itself.
 test('hitBeam forgives a press within 5 px of the beam, and not beyond', () => {

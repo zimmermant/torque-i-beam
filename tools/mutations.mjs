@@ -125,6 +125,8 @@ const MUTATIONS = [
     'export const FORCE_PX_PER_N = 1.6;', 'export const FORCE_PX_PER_N = 2;'],
   ['geometry.js', 'a drag of any length moves the tip of r',
     'export const R_DRAG_MIN_PX = 6;', 'export const R_DRAG_MIN_PX = 0;'],
+  ['geometry.js', 'leverTipFromPointer does not clamp the pointer to the viewBox',
+    'const w = { x: clampTo(world.x, lo.x, hi.x), y: clampTo(world.y, lo.y, hi.y) };', 'const w = { x: world.x, y: world.y };'],
   ['state.js', 'a fresh state starts with a pivot at the centre of the beam',
     'let pivot = null;', 'let pivot = { x: 0, y: 0 };'],
   ['state.js', 'setForce stores the raw magnitude instead of whole newtons',

@@ -67,9 +67,14 @@ export function aimFromPointer(forcePoint, world) {
   };
 }
 
-// The dragged tip of r, or null if the drag is too short to count.
+// The dragged tip of r, or null if the drag is too short to count. Pointer
+// capture keeps delivering moves outside the svg, so the pointer is first
+// clamped to the viewBox inset by 12 px: the tip (and the handle on it) always
+// stays where it can be seen and grabbed.
 export function leverTipFromPointer(pivot, world) {
-  const distPx = Math.hypot(world.x - pivot.x, world.y - pivot.y) * PX_PER_M;
+  const lo = toWorld({ x: 12, y: VB.h - 12 }), hi = toWorld({ x: VB.w - 12, y: 12 });
+  const w = { x: clampTo(world.x, lo.x, hi.x), y: clampTo(world.y, lo.y, hi.y) };
+  const distPx = Math.hypot(w.x - pivot.x, w.y - pivot.y) * PX_PER_M;
   if (distPx < R_DRAG_MIN_PX) return null;
-  return { x: world.x, y: world.y };
+  return { x: w.x, y: w.y };
 }
