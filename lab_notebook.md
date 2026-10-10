@@ -4,12 +4,12 @@
 
 ### Summary
 
-Executed `docs/superpowers/plans/2026-10-10-torque-i-beam.md` on branch `feat/initial-build` (19 commits ahead of `main` at the time of writing) with `ccpm-superpowers` / `superpowers:subagent-driven-development`: Tasks 1-9 each by a fresh **haiku** implementer and each reviewed by a **sonnet** reviewer (fix rounds resumed the implementer; every round ended with a scoped re-review); Task 10 (verification) by me as coordinator, which needs the Browser pane. Result:
+Executed `docs/superpowers/plans/2026-10-10-torque-i-beam.md` on branch `feat/initial-build` (31 commits ahead of `main` at the time of writing; 19 of them at the first verified build, `67b7d46`) with `ccpm-superpowers` / `superpowers:subagent-driven-development`: Tasks 1-9 each by a fresh **haiku** implementer and each reviewed by a **sonnet** reviewer (fix rounds resumed the implementer; every round ended with a scoped re-review); Task 10 (verification) by me as coordinator, which needs the Browser pane. Result:
 
-- **136 tests** (the plan said 125; review rounds added 11: state +7, panel +1, interact +3), all passing.
-- **108 mutation rows** in `tools/mutations.mjs`; `node tools/mutations.mjs --coverage --strict` reports **136 of 136 tests are made to fail by at least one mutation**, exit 0. (A full run takes about 10 minutes.)
-- `dist/torque_i_beam.html`, **50,096 bytes on disk** (build.js reports 50,046, which counts UTF-16 code units), byte-reproducible (the plan said 49,542; Task 5's review added 2 lines to `state.js`).
-- Browser sweeps at the verified scene scale (646 px wide, viewport 1024x768): **1,080** force states, **5,040** states with a lever arm (all 5,040 valid, 0 missed), **864** revealed states: **zero** label/hit violations; the rotated beam stays at least 101.7 px inside the panel.
+- **FINAL: 148 tests**, all passing. (At the first verified build it was 136: the plan said 125 and review rounds added 11, state +7, panel +1, interact +3; the post-review fix wave added 12 more. See 'Fix wave' below.)
+- **FINAL: 124 mutation rows** in `tools/mutations.mjs`; `node tools/mutations.mjs --coverage --strict` reports **148 of 148 tests are made to fail by at least one mutation**, exit 0. (At the first verified build: 108 rows, 136 of 136.) A full run takes about 10 minutes and now works on a temporary copy of the repo.
+- `dist/torque_i_beam.html`, **FINAL 52,258 bytes on disk** (build.js reports 52,208, which counts UTF-16 code units), byte-reproducible. (At the first verified build: 50,096 on disk; the plan said 49,542 before review rounds added code.)
+- Browser sweeps at the verified scene scale (646 px wide, viewport 1024x768): **1,080** force states, **5,040** states with a lever arm (all 5,040 valid, 0 missed), **864** revealed states: **zero** label/hit violations; the rotated beam stays at least 101.7 px inside the panel. **Re-run on the final build after the fix wave: zero again** (same three sweeps, same scale).
 - Real-mouse checks (below): all pass.
 - **What the tests do not reach:** `src/app.js` wiring and `scene.js`'s `draw()` and swing animation are verified only in the browser (everything else has unit tests), except `renderAll`'s control state, which is now covered through the pure `controlsView`.
 - The full SDD ledger, with every ruling and deferred minor, is committed at `docs/superpowers/sdd-ledger-torque-i-beam.md`; the mutation audit report and the raw coverage run are `docs/superpowers/mutation-audit-report.md` and `docs/superpowers/mutation-coverage-run.txt`.
