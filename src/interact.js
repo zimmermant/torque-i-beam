@@ -84,8 +84,10 @@ export function createInteraction(svg, state, hooks) {
     if (!drag || e.pointerId !== dragPointerId) return;
     const world = toWorld(clientToSvg(svg, e.clientX, e.clientY));
     const s = state.getState();
-    if (drag === 'force') state.setForce(aimFromPointer(s.forcePoint, world));
-    else state.setRTip(leverTipFromPointer(s.pivot, world));
+    // New problem or Back (a second finger, or the keyboard) can empty the state mid-drag;
+    // a move then has nothing to steer, and must not throw on the missing point.
+    if (drag === 'force') { if (s.forcePoint) state.setForce(aimFromPointer(s.forcePoint, world)); }
+    else if (s.pivot) { state.setRTip(leverTipFromPointer(s.pivot, world)); }
   });
 
   svg.addEventListener('pointerup', endDrag);

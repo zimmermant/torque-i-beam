@@ -265,3 +265,34 @@ test('the same pointer pressing again while a drag is live starts afresh', () =>
   r.fire('pointerup', { x: -1, y: 0.25 });
   assert.strictEqual(r.it.getDrag(), null);
 });
+
+// Mutation: removing the forcePoint guard in pointermove. New problem (or a second finger on the
+// keyboard) empties the state mid-aim; every further move would throw "reading 'x'" of null.
+test('a New problem during an aim drag: later moves are harmless and the release still ends the drag', () => {
+  const r = rig();
+  r.fire('pointerdown', { x: 1, y: 0 });
+  assert.strictEqual(r.it.getDrag(), 'force');
+  r.state.reset();
+  assert.strictEqual(r.state.getState().forcePoint, null);
+  r.fire('pointermove', { x: 1, y: 0.8 });                        // must not throw
+  r.fire('pointermove', { x: 1.5, y: 0.8 });
+  assert.strictEqual(r.state.getState().force, null, 'nothing to aim');
+  r.fire('pointerup', { x: 1.5, y: 0.8 });
+  assert.strictEqual(r.it.getDrag(), null);
+  assert.ok(!r.svg.held.has(1), 'capture was released');
+});
+
+// Mutation: removing the pivot guard in pointermove, same failure for the r drag after Back.
+test('Back during an r drag: later moves are harmless and the release still ends the drag', () => {
+  const r = rig();
+  throughForce(r);
+  r.fire('pointerdown', { x: -1, y: 0 });
+  assert.strictEqual(r.it.getDrag(), 'r');
+  r.state.back();                                                 // the pivot is removed
+  assert.strictEqual(r.state.getState().pivot, null);
+  r.fire('pointermove', { x: 0, y: 0.25 });                       // must not throw
+  r.fire('pointermove', { x: 0.5, y: 0.25 });
+  assert.strictEqual(r.state.getState().rTip, null, 'nothing to draw from');
+  r.fire('pointerup', { x: 0.5, y: 0.25 });
+  assert.strictEqual(r.it.getDrag(), null);
+});
