@@ -14,13 +14,22 @@
 //     every test and proves nothing).
 // A row's file is a src/ file name (JavaScript, or index.template.html), or 'build.js'.
 //
-// The source file is always restored, even if a run throws.
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+// The run takes about 10 minutes and works on a TEMPORARY COPY (src/, test/, build.js and
+// package.json copied into the system temp directory). The real repository is never written,
+// so an interrupted run (Ctrl-C) cannot leave a mutated source behind. The copy is removed
+// at the end and on SIGINT / SIGTERM.
+import { readFileSync, writeFileSync, readdirSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
+const work = mkdtempSync(join(tmpdir(), 'tib-mut-'));
+const root = work;                       // every path below reads, writes and runs inside the copy
+for (const f of ['src', 'test', 'build.js', 'package.json']) cpSync(join(repo, f), join(work, f), { recursive: true });
+const cleanup = () => rmSync(work, { recursive: true, force: true });
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { cleanup(); process.exit(130); });
 const MAX_FAILING = 12;
 
 const MUTATIONS = [
@@ -294,7 +303,7 @@ for (const [file, what, find, replace] of MUTATIONS) {
     if (!ok) bad++;
     console.log(`${ok ? 'caught ' : 'MISSED '} ${String(failing.length).padStart(3)} failing  ${file}: ${what}`);
   } finally {
-    writeFileSync(path, original);
+    writeFileSync(path, original);   // restores the copy between rows; the repo is never touched
   }
 }
 const base = await runSuite();
@@ -308,6 +317,7 @@ if (coverage) {
     for (const id of uncovered) console.log(`   ${id}`);
   }
 }
+cleanup();
 if (bad || base.failing.length !== 0) { console.log(`${bad} mutation(s) not caught`); process.exit(1); }
 console.log(`all ${MUTATIONS.length} mutations caught`);
 if (strict && uncovered.length) process.exit(1);

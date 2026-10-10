@@ -21,6 +21,7 @@ export NODE=/opt/homebrew/Cellar/node@22/22.23.2_1/bin/node   # Homebrew's `node
 $NODE --test test/*.test.js        # always a glob: `node --test test/` misreports here
 $NODE build.js                     # writes dist/torque_i_beam.html
 $NODE tools/mutations.mjs          # breaks one thing at a time; the suite must fail each time
+                                   # (runs on a temporary copy, never your files; takes about 10 minutes)
 ```
 
 To check the real page, serve the repo root (`python3 -m http.server 8742 --bind 127.0.0.1`), open `http://127.0.0.1:8742/dist/torque_i_beam.html`, and load `tools/browser-harness.js` (see its header). It drives the real pointer handlers and measures real label boxes against the arrows, the triangle, the torque arc, the beam and the viewBox.
