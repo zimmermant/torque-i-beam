@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torque on an I-beam</title>
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: #f7f7f8;
+  color: #111827;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+h1 { font-size: 20px; margin: 0 0 4px; }
+.lede { margin: 0 0 12px; color: #555b66; font-size: 14px; }
+
+/* step indicator */
+.steps {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  list-style: none; margin: 0 0 10px; padding: 0;
+}
+.steps li {
+  padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  border: 1px solid #d8dbe0; background: #fff; color: #6b7280;
+}
+.steps li.is-done    { background: #e8f1fb; border-color: #b9d3ee; color: #28598a; }
+.steps li.is-current { background: #111827; border-color: #111827; color: #fff; }
+
+.instruction { margin: 0 0 12px; min-height: 22px; font-size: 15px; font-weight: 600; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 14px;
+  max-width: 1400px;
+  align-items: start;
+}
+
+.stage {
+  background: #fff; border: 1px solid #e3e5e9; border-radius: 10px; overflow: hidden;
+}
+.stage svg { display: block; width: 100%; height: auto; touch-action: none; user-select: none; }
+
+/* the beam answers to the pointer whenever a press would place something */
+.beam--armed { cursor: crosshair; }
+.beam--armed:hover .beam-web    { fill: #cfe0f3; }
+.beam--armed:hover .beam-flange { fill: #7f93aa; }
+
+/* handles: every one that can be grabbed must visibly respond */
+.handle { cursor: grab; }
+.handle:hover .dot { fill: #fff6e8; stroke-width: 4; }
+.handle:hover .hit { fill: rgba(17, 24, 39, 0.06); }
+.handle--active { cursor: grabbing; }
+.handle--active .dot { fill: #ffe9c7; stroke-width: 4; }
+.handle--active .hit { fill: rgba(17, 24, 39, 0.1); }
+.handle--idle, .handle--idle .hit, .handle--idle .dot { cursor: default; pointer-events: none; }
+
+/* buttons */
+button {
+  font: inherit; font-size: 14px; font-weight: 600;
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid #c4c9d2; background: #fff; color: #111827; cursor: pointer;
+  transition: background .12s, border-color .12s, transform .05s;
+}
+button:hover:not(:disabled)  { background: #eef2f7; border-color: #8a94a3; }
+button:active:not(:disabled) { background: #dde4ee; transform: translateY(1px); }
+button:focus-visible { outline: 3px solid #3a86c8; outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button[hidden] { display: none; }
+
+.predict, .toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+.predict { border-top: 1px solid #eceef1; background: #fafafb; }
+.predict button.is-selected { background: #111827; border-color: #111827; color: #fff; opacity: 1; }
+.predict button.is-right    { background: #1f7a45; border-color: #1f7a45; color: #fff; opacity: 1; }
+.predict button.is-wrong    { background: #b42318; border-color: #b42318; color: #fff; opacity: 1; }
+
+/* the side panel */
+.side { display: grid; gap: 10px; }
+.card { background: #fff; border: 1px solid #e3e5e9; border-radius: 10px; padding: 10px 12px; }
+.card h3 {
+  margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: #6b7280;
+}
+.card h3 b { font-family: Georgia, serif; font-style: italic; text-transform: none; color: #111827; font-size: 14px; }
+.card--warn   { border-color: #e9b86b; background: #fffaf0; }
+.card--result { border-color: #c9b6f2; background: #fbf9ff; }
+.row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 14px; }
+.row .k { color: #6b7280; }
+.row .v { font-family: ui-monospace, "SF Mono", Menlo, monospace; text-align: right; }
+.row.ok  .v { color: #1f7a45; }
+.calc { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; line-height: 1.7; margin: 2px 0 8px; }
+.calc > div:not(:first-child) { padding-left: 1.4em; }
+.calc > .calc-k { margin-top: 2px; font-weight: 700; padding-left: 0; }
+.row.warn .v { color: #b45309; }
+.badge { background: #111827; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-family: system-ui, sans-serif; }
+.note { margin: 12px 0 0; font-size: 12px; color: #6b7280; max-width: 1400px; }
+.card .note { margin: 6px 0 0; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body>
+<h1>Torque on an I-beam</h1>
+<p class="lede">Apply a force, choose a pivot, draw the lever arm, then predict which way the beam will turn.</p>
+
+<ol id="steps" class="steps" aria-label="Steps"></ol>
+<p id="instruction" class="instruction" aria-live="polite"></p>
+
+<div class="layout">
+  <section class="stage">
+    <svg id="scene-svg" viewBox="0 0 960 560" role="img" aria-label="An I-beam seen from the side, with the force, pivot and lever arm you place"></svg>
+    <div class="predict" role="group" aria-label="Your prediction">
+      <button type="button" data-answer="cw">Clockwise (&minus;)</button>
+      <button type="button" data-answer="ccw">Counterclockwise (+)</button>
+      <button type="button" data-answer="zero">Neither (&tau; = 0)</button>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="back">Back</button>
+      <button type="button" id="new-problem">New problem</button>
+      <button type="button" id="replay" hidden>Replay</button>
+      <button type="button" id="same-force" hidden>Same force, new pivot</button>
+    </div>
+  </section>
+  <aside id="panel" class="side" aria-label="Numbers"></aside>
+</div>
+
+<p class="note">Torque is &tau; = r &times; F. Counterclockwise is positive, clockwise negative. The beam&rsquo;s own weight and gravity are ignored.</p>
+
+<script>
+(function () {
+"use strict";
+// ===== physics.js =====
+const DEG = Math.PI / 180;
+const MAG_MIN = 10;
+const MAG_MAX = 100;
+
+// A torque smaller than this is "zero". Verified by sweep over every reachable
+// state (test/physics.test.js): genuine zeros are below 2.2e-14 N.m and the
+// smallest real torque is 0.335 N.m, so nothing sits anywhere near this line.
+const TAU_EPS = 1e-9;
+
+function normalizeAngle(deg) {
+  return (((deg % 360) + 360) % 360) + 0;
+}
+
+// Shortest way round the circle between two angles, in [0, 180].
+function circDist(a, b) {
+  const d = Math.abs(normalizeAngle(a) - normalizeAngle(b));
+  return d > 180 ? 360 - d : d;
+}
+
+// The 24 directions a force can point: the four axes, 30/45/60 mirrored into
+// every quadrant, and the two 3-4-5 angles (36.87, 53.13) likewise.
+//   axis   -> ux, uy: the exact unit vector, so cos(90) = 6e-17 never appears
+//   triple -> run, rise, hyp and the signs sx, sy of the quadrant, so the
+//             components are (m*run)/hyp -- multiply first, then divide
+function buildDetents() {
+  const out = [];
+  out.push({ angle: 0,   kind: 'axis', ux: 1,  uy: 0 });
+  out.push({ angle: 90,  kind: 'axis', ux: 0,  uy: 1 });
+  out.push({ angle: 180, kind: 'axis', ux: -1, uy: 0 });
+  out.push({ angle: 270, kind: 'axis', ux: 0,  uy: -1 });
+  for (const base of [30, 45, 60]) {
+    for (const a of [base, 180 - base, 180 + base, 360 - base]) {
+      out.push({ angle: a, kind: 'standard' });
+    }
+  }
+  const triples = [
+    { base: Math.atan2(3, 4) / DEG, run: 4, rise: 3 },   // 36.87 deg
+    { base: Math.atan2(4, 3) / DEG, run: 3, rise: 4 }    // 53.13 deg
+  ];
+  for (const t of triples) {
+    const shape = { kind: 'triple', run: t.run, rise: t.rise, hyp: 5 };
+    out.push({ angle: t.base,       ...shape, sx: 1,  sy: 1 });
+    out.push({ angle: 180 - t.base, ...shape, sx: -1, sy: 1 });
+    out.push({ angle: 180 + t.base, ...shape, sx: -1, sy: -1 });
+    out.push({ angle: 360 - t.base, ...shape, sx: 1,  sy: -1 });
+  }
+  return out.sort((a, b) => a.angle - b.angle);
+}
+
+const DETENTS = buildDetents();
+
+// The detent sitting exactly at this angle, or null. Exact (1e-9), not a
+// tolerance: only snapAngle's output lands on a detent.
+function detentAt(angle) {
+  for (const d of DETENTS) {
+    if (circDist(d.angle, angle) < 1e-9) return d;
+  }
+  return null;
+}
+
+// Nearest detent, going the short way round the circle. On a tie the lower
+// angle wins.
+function snapAngle(deg) {
+  if (!Number.isFinite(deg)) return 0;
+  let best = DETENTS[0];
+  let bestDist = circDist(DETENTS[0].angle, deg);
+  for (const d of DETENTS) {
+    const dist = circDist(d.angle, deg);
+    if (dist < bestDist) { best = d; bestDist = dist; }
+  }
+  return best.angle;
+}
+
+function snapMagnitude(m) {
+  if (!Number.isFinite(m)) return MAG_MIN;
+  return Math.min(MAG_MAX, Math.max(MAG_MIN, Math.round(m)));
+}
+
+// Cartesian components of a force. Exact at the axes and at the 3-4-5 detents;
+// the `+ 0` turns a negative zero into a plain zero.
+function components(mag, angle) {
+  const d = detentAt(angle);
+  let x, y;
+  if (d && d.kind === 'axis') {
+    x = d.ux * mag;
+    y = d.uy * mag;
+  } else if (d && d.kind === 'triple') {
+    x = d.sx * (mag * d.run) / d.hyp;
+    y = d.sy * (mag * d.rise) / d.hyp;
+  } else {
+    x = mag * Math.cos(angle * DEG);
+    y = mag * Math.sin(angle * DEG);
+  }
+  return { x: x + 0, y: y + 0 };
+}
+
+// Magnitude and angle of a vector. A zero vector has no angle.
+function polar(v) {
+  const mag = Math.hypot(v.x, v.y);
+  return { mag, angle: mag === 0 ? null : normalizeAngle(Math.atan2(v.y, v.x) / DEG) };
+}
+
+// The k-hat component of r x F. Counterclockwise is positive.
+function torqueZ(r, F) {
+  return r.x * F.y - r.y * F.x + 0;
+}
+
+function classify(tau) {
+  if (Math.abs(tau) < TAU_EPS) return 'zero';
+  return tau > 0 ? 'ccw' : 'cw';
+}
+
+// ===== format.js =====
+const I_HAT = 'î';
+const J_HAT = 'ĵ';
+const K_HAT = 'k̂';
+const MINUS = '−';
+
+// The only way a number reaches the screen. Rounds here and nowhere else; a
+// null or non-finite value prints as a dash; and negative zero can never
+// appear, because String(-0) is "0" and Number("-0.00") is -0.
+function fmt(n, dp = 2) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  const s = String(Number(n.toFixed(dp)));
+  return s.startsWith('-') ? MINUS + s.slice(1) : s;
+}
+
+function fmtAngle(a) {
+  return a === null || a === undefined ? '—' : `${fmt(a)}°`;
+}
+
+// "30 î + 40 ĵ N" -- the sign between the terms follows the ROUNDED y, so a
+// y that prints as 0 never shows as "- 0".
+function vecText(v, unit) {
+  const ry = Number(v.y.toFixed(2));
+  const sign = ry < 0 ? MINUS : '+';
+  const tail = unit ? ` ${unit}` : '';
+  return `${fmt(v.x)} ${I_HAT} ${sign} ${fmt(Math.abs(v.y))} ${J_HAT}${tail}`;
+}
+
+function parenthesized(n) {
+  return `(${fmt(n)})`;
+}
+
+// ===== svg.js =====
+const NS = 'http://www.w3.org/2000/svg';
+
+// One palette for the whole app. It lives here rather than in each renderer
+// because build.js concatenates every module into a single scope, so a
+// top-level `const C1` in three files would collide and fail the build.
+const COLORS = {
+  force:  '#e06c3a',   // the applied force F
+  lever:  '#3a86c8',   // the lever-arm vector r
+  torque: '#7c3aed',   // the torque's sense of rotation
+  warn:   '#d97706',   // r that does not reach the force point
+  ink:    '#111827',   // pivot, outlines, the 3-4-5 triangle
+  annot:  '#9aa3af',   // muted ink for the ghost outline
+  beam:   '#dbe3ec',   // the beam's web
+  flange: '#94a3b8'    // the beam's flanges
+};
+
+function el(name, attrs = {}, parent = null) {
+  const node = document.createElementNS(NS, name);
+  for (const k in attrs) {
+    const v = attrs[k];
+    if (v !== null && v !== undefined) node.setAttribute(k, String(v));
+  }
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+function clear(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+// Text with a background-coloured halo so labels stay readable where they cross lines.
+function text(parent, x, y, str, opts = {}) {
+  const node = el('text', {
+    x, y,
+    'font-size': opts.size || 14,
+    'font-family': 'system-ui, -apple-system, sans-serif',
+    'font-style': opts.italic ? 'italic' : null,
+    fill: opts.fill || COLORS.ink,
+    'text-anchor': opts.anchor || 'start',
+    'font-weight': opts.weight || 400,
+    'paint-order': 'stroke',
+    stroke: '#ffffff',
+    'stroke-width': opts.halo === false ? 0 : 3.5,
+    'stroke-linejoin': 'round'
+  }, parent);
+  node.textContent = str;
+  return node;
+}
+
+// Pointer position in viewBox units. Handles CSS scaling and page scroll correctly,
+// which naive clientX - rect.left arithmetic does not.
+function clientToSvg(svg, clientX, clientY) {
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+// ===== geometry.js =====
+
+
+// Everything that knows the beam's SHAPE, and the only place the y axis is
+// flipped. Every other module works in world coordinates: metres, y up, origin
+// at the beam's centre. Every constant below was checked by the sweeps in
+// test/geometry.test.js and test/scene.test.js.
+const VB = { w: 960, h: 560 };
+const PX_PER_M = 100;
+const ORIGIN_PX = { x: 480, y: 280 };
+const BEAM = { length: 5, depth: 0.5, flange: 0.08 };
+const GRID = 0.25;
+const FORCE_PX_PER_N = 1.6;
+const R_SNAP_M = 0.12;
+const AIM_MIN_PX = 12;
+const R_DRAG_MIN_PX = 6;
+const HIT_MARGIN_M = 0.05;
+
+function clampTo(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+
+function toPx(p) {
+  return { x: ORIGIN_PX.x + p.x * PX_PER_M, y: ORIGIN_PX.y - p.y * PX_PER_M };
+}
+
+function toWorld(px) {
+  return { x: (px.x - ORIGIN_PX.x) / PX_PER_M, y: (ORIGIN_PX.y - px.y) / PX_PER_M };
+}
+
+// The whole bounding rectangle, not the I-beam outline, so the gaps beside the
+// web stay clickable -- plus a 5px margin, so a press on the beam's outer edge
+// (where the grid's top and bottom rows live) is never lost to a pixel of error.
+function hitBeam(w) {
+  return Math.abs(w.x) <= BEAM.length / 2 + HIT_MARGIN_M &&
+         Math.abs(w.y) <= BEAM.depth / 2 + HIT_MARGIN_M;
+}
+
+// Force point and pivot live on a 0.25 m grid, three rows (top flange, web,
+// bottom flange), so every r component is a multiple of 0.25 and the numbers
+// stay clean.
+function snapToGrid(w) {
+  const hx = BEAM.length / 2, hy = BEAM.depth / 2;
+  const x = clampTo(Math.round(w.x / GRID) * GRID, -hx, hx);
+  const y = clampTo(Math.round(w.y / GRID) * GRID, -hy, hy);
+  return { x: x + 0, y: y + 0 };
+}
+
+// The beam as three rectangles in world metres: top flange, web, bottom flange.
+function beamRects() {
+  const hx = BEAM.length / 2, hy = BEAM.depth / 2, f = BEAM.flange;
+  return [
+    { role: 'flange', x0: -hx, x1: hx, y0: hy - f, y1: hy },
+    { role: 'web',    x0: -hx, x1: hx, y0: -hy + f, y1: hy - f },
+    { role: 'flange', x0: -hx, x1: hx, y0: -hy, y1: -hy + f }
+  ];
+}
+
+// Turn a pointer position into a force, or null if the drag is too short to
+// count as aiming (a plain click leaves the point placed and unaimed).
+function aimFromPointer(forcePoint, world) {
+  const dx = world.x - forcePoint.x, dy = world.y - forcePoint.y;
+  const distPx = Math.hypot(dx, dy) * PX_PER_M;
+  if (distPx < AIM_MIN_PX) return null;
+  return {
+    mag: snapMagnitude(distPx / FORCE_PX_PER_N),
+    angle: snapAngle(Math.atan2(dy, dx) / DEG)
+  };
+}
+
+// The dragged tip of r, or null if the drag is too short to count.
+function leverTipFromPointer(pivot, world) {
+  const distPx = Math.hypot(world.x - pivot.x, world.y - pivot.y) * PX_PER_M;
+  if (distPx < R_DRAG_MIN_PX) return null;
+  return { x: world.x, y: world.y };
+}
+
+// ===== state.js =====
+
+
+
+// The ONLY stored state is these five inputs. Everything else -- the force's
+// components, the snapped r, whether it is valid, the torque, the verdict, and
+// even which step the student is on -- is derived on read, so no two panels can
+// disagree and the step can never drift out of sync with the data.
+function samePoint(a, b) {
+  if (a === null || b === null) return a === b;
+  return a.x === b.x && a.y === b.y;
+}
+
+function sameForce(a, b) {
+  if (a === null || b === null) return a === b;
+  return a.mag === b.mag && a.angle === b.angle;
+}
+
+function copyPoint(p) {
+  return p === null ? null : { x: p.x, y: p.y };
+}
+
+const PREDICTIONS = ['cw', 'ccw', 'zero'];
+
+// Pure. Takes the stored inputs, returns everything computed from them.
+//   r is the vector from the pivot to the force point, or -- when the dragged
+//   tip is not within R_SNAP_M of the force point -- to the raw tip, flagged
+//   invalid so the prediction stays locked.
+function derive(s) {
+  const F = s.force ? components(s.force.mag, s.force.angle) : null;
+  let r = null;
+  let rValid = false;
+  if (s.pivot && s.rTip && s.forcePoint) {
+    const gap = Math.hypot(s.rTip.x - s.forcePoint.x, s.rTip.y - s.forcePoint.y);
+    rValid = gap <= R_SNAP_M;
+    const tip = rValid ? s.forcePoint : s.rTip;
+    r = { x: tip.x - s.pivot.x + 0, y: tip.y - s.pivot.y + 0 };
+  }
+  const tau = rValid && F ? torqueZ(r, F) : null;
+  const truth = tau === null ? null : classify(tau);
+  const correct = truth !== null && s.prediction !== null ? s.prediction === truth : null;
+  return { F, r, rValid, tau, truth, correct };
+}
+
+function createState() {
+  let forcePoint = null;
+  let force = null;
+  let pivot = null;
+  let rTip = null;
+  let prediction = null;
+  let subscribers = [];
+
+  function getState() {
+    return {
+      forcePoint: copyPoint(forcePoint),
+      force: force === null ? null : { mag: force.mag, angle: force.angle },
+      pivot: copyPoint(pivot),
+      rTip: copyPoint(rTip),
+      prediction
+    };
+  }
+
+  function notify() {
+    const snapshot = getState();
+    for (const fn of subscribers.slice()) fn(snapshot);
+  }
+
+  // Moving the force point restarts everything downstream of it.
+  function setForcePoint(world) {
+    const v = snapToGrid(world);
+    if (samePoint(v, forcePoint)) return;
+    forcePoint = v;
+    force = null;
+    pivot = null;
+    rTip = null;
+    prediction = null;
+    notify();
+  }
+
+  // null un-aims the force (a drag that came back below the minimum length).
+  function setForce(f) {
+    const v = f === null ? null : { mag: snapMagnitude(f.mag), angle: snapAngle(f.angle) };
+    if (!forcePoint || sameForce(v, force)) return;
+    force = v;
+    prediction = null;                 // a changed force invalidates the verdict it was judged against
+    if (v === null) { pivot = null; rTip = null; }   // un-aiming the force leaves nothing downstream to keep
+    notify();
+  }
+
+  // A pivot on the force point's own grid point makes r zero by construction,
+  // so the state sets the tip itself and the student goes straight to predict.
+  function setPivot(world) {
+    if (!forcePoint || !force) return;
+    const v = snapToGrid(world);
+    const nextTip = samePoint(v, forcePoint) ? copyPoint(forcePoint) : null;
+    if (samePoint(v, pivot) && samePoint(nextTip, rTip) && prediction === null) return;
+    pivot = v;
+    rTip = nextTip;
+    prediction = null;
+    notify();
+  }
+
+  function setRTip(world) {
+    if (!pivot) return;
+    const v = world === null ? null : { x: world.x, y: world.y };
+    if (samePoint(v, rTip)) return;
+    rTip = v;
+    prediction = null;
+    notify();
+  }
+
+  // Locked until r is valid; one of the three answers.
+  function setPrediction(p) {
+    if (p !== null && !PREDICTIONS.includes(p)) return;
+    if (p !== null && !derive(getState()).rValid) return;
+    if (p === prediction) return;
+    prediction = p;
+    notify();
+  }
+
+  // Clear the most recent input. A pivot placed on the force point carries its
+  // own auto-set tip, so both go together.
+  function back() {
+    if (prediction !== null) prediction = null;
+    else if (rTip !== null) {
+      const auto = samePoint(pivot, forcePoint);
+      rTip = null;
+      if (auto) pivot = null;
+    }
+    else if (pivot !== null) pivot = null;
+    else if (force !== null) force = null;
+    else if (forcePoint !== null) forcePoint = null;
+    else return;
+    notify();
+  }
+
+  function sameForceNewPivot() {
+    if (pivot === null && rTip === null && prediction === null) return;
+    pivot = null;
+    rTip = null;
+    prediction = null;
+    notify();
+  }
+
+  function reset() {
+    if (!forcePoint && !force && !pivot && !rTip && !prediction) return;
+    forcePoint = null;
+    force = null;
+    pivot = null;
+    rTip = null;
+    prediction = null;
+    notify();
+  }
+
+  function subscribe(fn) {
+    subscribers.push(fn);
+    return () => { subscribers = subscribers.filter(f => f !== fn); };
+  }
+
+  return {
+    getState, setForcePoint, setForce, setPivot, setRTip, setPrediction,
+    back, sameForceNewPivot, reset, subscribe
+  };
+}
+
+// ===== steps.js =====
+
+
+
+const STEPS = ['place', 'aim', 'pivot', 'draw', 'predict', 'reveal'];
+const STEP_LABELS = {
+  place: 'Place force', aim: 'Aim force', pivot: 'Pivot',
+  draw: 'Lever arm r', predict: 'Predict', reveal: 'Result'
+};
+
+// Which step the student is on, derived from which inputs exist. `drag` is the
+// transient gesture in progress ('force', 'r' or null): while dragging, the
+// step stays put even though the value being dragged already exists, so the
+// instruction does not flip mid-gesture.
+function deriveStep(s, drag) {
+  if (!s.forcePoint) return 'place';
+  if (drag === 'force' || !s.force) return 'aim';
+  if (!s.pivot) return 'pivot';
+  if (drag === 'r') return 'draw';
+  if (!s.rTip || !derive(s).rValid) return 'draw';
+  if (!s.prediction) return 'predict';
+  return 'reveal';
+}
+
+const TURN_WORD = { ccw: 'counterclockwise', cw: 'clockwise' };
+
+function instruction(step, s) {
+  const d = derive(s);
+  switch (step) {
+    case 'place':
+      return 'Click the beam where the force acts.';
+    case 'aim':
+      return 'Drag away from that point to set the force’s direction and size. It snaps to common angles.';
+    case 'pivot':
+      return 'Click the beam to choose the pivot.';
+    case 'draw':
+      return s.rTip && !d.rValid
+        ? 'r should end where the force acts — drag its tip onto the force point.'
+        : 'Drag from the pivot to the force point to draw the lever arm r.';
+    case 'predict':
+      return d.r.x === 0 && d.r.y === 0
+        ? 'The pivot is at the force point, so r = 0 and τ = 0. Predict the rotation.'
+        : 'Will the beam turn clockwise (−), counterclockwise (+), or not at all?';
+    case 'reveal': {
+      const verdict = d.correct ? 'Correct.' : 'Not quite.';
+      return d.truth === 'zero'
+        ? `${verdict} The torque is 0 N·m, so the beam does not rotate.`
+        : `${verdict} The torque is ${fmt(d.tau)} N·m, so the beam turns ${TURN_WORD[d.truth]}.`;
+    }
+    default:
+      return '';
+  }
+}
+
+// ===== panel.js =====
+
+
+
+
+// The side panel as a pure string, so a test can check it without a DOM.
+// Every number is built from derive() and formatted by fmt(), which is the only
+// place a value is rounded. Nothing interpolated here is user text, so there is
+// nothing to escape.
+function row(label, value, cls) {
+  return `<div class="row${cls ? ' ' + cls : ''}"><span class="k">${label}</span>` +
+         `<span class="v">${value}</span></div>`;
+}
+
+function card(title, rows, extra) {
+  return `<section class="card${extra ? ' ' + extra : ''}"><h3>${title}</h3>${rows.join('')}</section>`;
+}
+
+function point(p) {
+  return p ? `(${fmt(p.x)}, ${fmt(p.y)}) m` : '—';
+}
+
+function forceCard(s, d) {
+  const triple = s.force ? detentAt(s.force.angle) : null;
+  const badge = triple && triple.kind === 'triple'
+    ? ' <span class="badge">3-4-5</span>' : '';
+  return card('Force <b>F</b>', [
+    row('|F|', s.force ? `${fmt(s.force.mag)} N` : '—'),
+    row('&theta;<sub>F</sub>', (s.force ? fmtAngle(s.force.angle) : '—') + badge),
+    row('F', d.F ? vecText(d.F, 'N') : '—'),
+    row('Applied at', point(s.forcePoint))
+  ]);
+}
+
+function pivotCard(s) {
+  return card('Pivot', [row('Pivot at', point(s.pivot))]);
+}
+
+function leverCard(s, d) {
+  const p = d.r ? polar(d.r) : null;
+  let status = '—';
+  let cls = '';
+  if (s.rTip && d.rValid) {
+    status = d.r.x === 0 && d.r.y === 0
+      ? 'r = 0: the pivot is at the force point'
+      : 'ends at the force point';
+    cls = 'ok';
+  } else if (s.rTip) {
+    status = 'not at the force point yet';
+    cls = 'warn';
+  }
+  return card('Lever arm <b>r</b>', [
+    row('|r|', p ? `${fmt(p.mag)} m` : '—'),
+    row('&theta;<sub>r</sub>', p ? fmtAngle(p.angle) : '—'),
+    row('r', d.r ? vecText(d.r, 'm') : '—'),
+    row('Status', status, cls)
+  ], !d.rValid && s.rTip ? 'card--warn' : '');
+}
+
+const SENSE_TEXT = {
+  ccw: 'counterclockwise (out of the page)',
+  cw: 'clockwise (into the page)',
+  zero: 'no rotation'
+};
+const ANSWER_TEXT = { ccw: 'counterclockwise (+)', cw: 'clockwise (−)', zero: 'neither (τ = 0)' };
+
+function torqueCard(s, d, step) {
+  if (step !== 'reveal') return card('Torque <b>&tau;</b>', [row('&tau;', '?')]);
+  const calc = `<div class="calc">` +
+    `<div>&tau; = r<sub>x</sub>F<sub>y</sub> − r<sub>y</sub>F<sub>x</sub></div>` +
+    `<div>= ${parenthesized(d.r.x)}·${parenthesized(d.F.y)} − ${parenthesized(d.r.y)}·${parenthesized(d.F.x)}</div>` +
+    `<div>= ${fmt(d.tau)} N·m</div>` +
+    `<div class="calc-k">&tau; = ${fmt(d.tau)} ${K_HAT} N·m</div></div>`;
+  const rows = [
+    calc,
+    row('Sense', SENSE_TEXT[d.truth]),
+    row('Your prediction', `${ANSWER_TEXT[s.prediction]} — ${d.correct ? 'correct' : 'not quite'}`, d.correct ? 'ok' : 'warn')
+  ];
+  rows.push(`<p class="note">Numbers are rounded to two decimals for display; the verdict uses the unrounded values.</p>`);
+  return card('Torque <b>&tau;</b>', rows, 'card--result');
+}
+
+function panelHtml(s, step) {
+  const d = derive(s);
+  return forceCard(s, d) + pivotCard(s) + leverCard(s, d) + torqueCard(s, d, step);
+}
+
+function createPanel(node) {
+  function render(s, step) {
+    node.innerHTML = panelHtml(s, step);
+  }
+  return { render };
+}
+
+// ===== scene.js =====
+
+
+
+
+
+// --- pure helpers (exported so a test can check them without a DOM) ---------
+const SWING_DEG = 18;
+const SWING_MS = 1200;
+const ARC_R = 52;
+const GLYPH_HYP_PX = 40;
+const GLYPH_OFFSET_PX = 30;
+
+// SVG's y axis points down, so a positive SVG rotation is CLOCKWISE on screen.
+function swingTarget(truth) {
+  if (truth === 'ccw') return -SWING_DEG;
+  if (truth === 'cw') return SWING_DEG;
+  return 0;
+}
+
+function easeOut(t) {
+  const u = 1 - Math.min(1, Math.max(0, t));
+  return 1 - u * u * u;
+}
+
+// The swing starts only on ENTERING the reveal. render() runs on every state
+// change; without this the beam would restart its swing every time it did.
+function shouldStartSwing(prevStep, step) {
+  return step === 'reveal' && prevStep !== 'reveal';
+}
+
+function arrowPx(forcePoint, F) {
+  const from = toPx(forcePoint);
+  return { from, to: { x: from.x + F.x * FORCE_PX_PER_N, y: from.y - F.y * FORCE_PX_PER_N } };
+}
+
+// Smallest distance between an axis-aligned box and a segment (sampled).
+function boxSegDist(b, p, q) {
+  let m = Infinity;
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60, x = p.x + t * (q.x - p.x), y = p.y + t * (q.y - p.y);
+    m = Math.min(m, Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.y0 - y, 0, y - b.y1)));
+  }
+  return m;
+}
+
+// Gap between two boxes; negative when they overlap.
+function boxGap(a, b) {
+  return Math.max(b.x0 - a.x1, a.x0 - b.x1, b.y0 - a.y1, a.y0 - b.y1);
+}
+
+// The box a short label occupies. x, y is the text's anchor point and baseline.
+function labelBox(x, y, w, anchor) {
+  const x0 = anchor === 'start' ? x : anchor === 'end' ? x - w : x - w / 2;
+  return { x0, y0: y - 14, x1: x0 + w, y1: y + 5 };
+}
+
+// A candidate label position that clears everything by at least this much is
+// "clear". The first clear candidate in priority order wins, so a label stays
+// where it is while the user drags and only moves when something gets in its way.
+const CLEAR_GOOD = 10;
+
+// Choose among candidates ({ x, y, anchor, w }, in priority order) against
+// obstacles ({ segments: [{p,q}], boxes: [{x0,y0,x1,y1}], beam: {x0,y0,x1,y1} }).
+// Touching a line or another label is a real collision; sitting on the beam's
+// grey fill is only a preference, because a label has a white halo and reads
+// fine there. So: the first candidate that is clear AND off the beam; failing
+// that, the first that is merely clear; failing that, the one with the most room.
+function pickLabel(candidates, obstacles) {
+  const scored = candidates.map(c => {
+    const box = labelBox(c.x, c.y, c.w, c.anchor);
+    let clear = Infinity;
+    for (const sg of obstacles.segments) clear = Math.min(clear, boxSegDist(box, sg.p, sg.q));
+    for (const bx of obstacles.boxes) clear = Math.min(clear, boxGap(box, bx));
+    const onBeam = obstacles.beam ? boxGap(box, obstacles.beam) < 0 : false;
+    return { ...c, clear, onBeam };
+  });
+  return scored.find(c => c.clear >= CLEAR_GOOD && !c.onBeam) ||
+         scored.find(c => c.clear >= CLEAR_GOOD) ||
+         scored.reduce((best, c) => (c.clear > best.clear + 1e-9 ? c : best));
+}
+
+// "F" goes just beyond the arrow's tip; if something is there, swing round the
+// tip to either side.
+function forceLabelCandidates(from, to, gap = 18) {
+  const len = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const ux = (to.x - from.x) / len, uy = (to.y - from.y) / len;
+  const out = [];
+  for (const g of [gap, gap + 12]) for (const deg of [0, 50, -50, 100, -100, 150, -150]) {
+    const c = Math.cos(deg * DEG), sn = Math.sin(deg * DEG);
+    const vx = ux * c - uy * sn, vy = ux * sn + uy * c;
+    out.push({ x: to.x + vx * g, y: to.y + vy * g + 5, w: 14,
+               anchor: vx > 0.3 ? 'start' : vx < -0.3 ? 'end' : 'middle' });
+  }
+  return out;
+}
+
+// "r" goes above the middle of the lever arm; if something is there, try below,
+// other places along it, and nearer in.
+function leverLabelCandidates(from, to) {
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let nx = -dy / len, ny = dx / len;
+  if (ny > 1e-9 || (Math.abs(ny) <= 1e-9 && nx < 0)) { nx = -nx; ny = -ny; }
+  const out = [];
+  for (const off of [36, 26, 50, 64]) for (const t of [0.5, 0.3, 0.7, 0.2, 0.8]) for (const side of [1, -1]) {
+    out.push({ x: from.x + t * dx + side * nx * off, y: from.y + t * dy + side * ny * off + 5,
+               w: 12, anchor: 'middle' });
+  }
+  return out;
+}
+
+// The curved arrow around the pivot showing the sense of rotation. Angles are
+// maths angles (counterclockwise from +x, y up); the arc stays above the beam
+// where it can.
+function torqueArc(pivotPx, truth) {
+  if (truth !== 'ccw' && truth !== 'cw') return null;
+  const a0 = truth === 'ccw' ? 30 : 150;
+  const a1 = truth === 'ccw' ? 150 : 30;
+  const pt = a => ({ x: pivotPx.x + ARC_R * Math.cos(a * DEG), y: pivotPx.y - ARC_R * Math.sin(a * DEG) });
+  const p0 = pt(a0), p1 = pt(a1);
+  const sweep = a1 > a0 ? 0 : 1;
+  return { start: p0, end: p1, a0, a1, sweep, d: `M ${p0.x} ${p0.y} A ${ARC_R} ${ARC_R} 0 0 ${sweep} ${p1.x} ${p1.y}` };
+}
+
+// The torque arc as a short polyline, so the labels can keep clear of it.
+function arcSegments(pivotPx, truth, n = 12) {
+  const arc = torqueArc(pivotPx, truth);
+  if (!arc) return [];
+  const pt = a => ({ x: pivotPx.x + ARC_R * Math.cos(a * DEG), y: pivotPx.y - ARC_R * Math.sin(a * DEG) });
+  const out = [];
+  let prev = pt(arc.a0);
+  for (let i = 1; i <= n; i++) {
+    const next = pt(arc.a0 + (arc.a1 - arc.a0) * i / n);
+    out.push({ p: prev, q: next });
+    prev = next;
+  }
+  return out;
+}
+
+// The small black slope triangle drawn beside a 3-4-5 force arrow, like the one
+// in a textbook figure. Its hypotenuse is parallel to the arrow, its legs are
+// horizontal and vertical, and it sits on the side of the arrow away from the
+// beam's centre line so it does not land on the beam.
+//   opts.offset -- how far from the arrow's middle (default GLYPH_OFFSET_PX)
+//   opts.flip   -- put it on the OTHER side of the arrow from the default
+function tripleGlyph(from, to, detent, opts = {}) {
+  const offset = opts.offset || GLYPH_OFFSET_PX;
+  const dir = { x: detent.sx * detent.run / detent.hyp, y: -detent.sy * detent.rise / detent.hyp };
+  const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  let n = { x: -dir.y, y: dir.x };
+  const farUp = Math.abs(mid.y - n.y * offset - ORIGIN_PX.y);
+  const farDown = Math.abs(mid.y + n.y * offset - ORIGIN_PX.y);
+  if (farUp > farDown || (farUp === farDown && n.y > 0)) n = { x: -n.x, y: -n.y };
+  if (opts.flip) n = { x: -n.x, y: -n.y };
+  const c = { x: mid.x + n.x * offset, y: mid.y + n.y * offset };
+  const a = { x: c.x - dir.x * GLYPH_HYP_PX / 2, y: c.y - dir.y * GLYPH_HYP_PX / 2 };
+  const b = { x: c.x + dir.x * GLYPH_HYP_PX / 2, y: c.y + dir.y * GLYPH_HYP_PX / 2 };
+  // the right-angle vertex: of the two candidates, the one farther from the arrow
+  const v1 = { x: b.x, y: a.y }, v2 = { x: a.x, y: b.y };
+  const side = v => (v.x - c.x) * n.x + (v.y - c.y) * n.y;
+  const v = side(v1) >= side(v2) ? v1 : v2;
+  const centroid = { x: (a.x + b.x + v.x) / 3, y: (a.y + b.y + v.y) / 3 };
+  const horiz = v === v1 ? { p: a, q: v } : { p: v, q: b };   // the leg on the line y = const
+  const vert = v === v1 ? { p: v, q: b } : { p: a, q: v };    // the leg on the line x = const
+  const hm = { x: (horiz.p.x + horiz.q.x) / 2, y: (horiz.p.y + horiz.q.y) / 2 };
+  const vm = { x: (vert.p.x + vert.q.x) / 2, y: (vert.p.y + vert.q.y) / 2 };
+  const hSign = hm.y >= centroid.y ? 1 : -1;
+  const vSign = vm.x >= centroid.x ? 1 : -1;
+  const hypMid = c;
+  let hn = { x: -dir.y, y: dir.x };
+  if ((v.x - c.x) * hn.x + (v.y - c.y) * hn.y > 0) hn = { x: -hn.x, y: -hn.y };   // away from the vertex
+  return {
+    a, b, v, centroid,
+    labels: [
+      { text: String(detent.run),  x: hm.x, y: hm.y + (hSign > 0 ? 15 : -7), anchor: 'middle' },
+      { text: String(detent.rise), x: vm.x + vSign * 8, y: vm.y + 4, anchor: vSign > 0 ? 'start' : 'end' },
+      { text: String(detent.hyp),  x: hypMid.x + hn.x * 13, y: hypMid.y + hn.y * 13 + 4, anchor: 'middle' }
+    ]
+  };
+}
+
+// Where the triangle could go: the default spot, further out, and the far side
+// of the arrow, in that order.
+function glyphCandidates(from, to, detent) {
+  const out = [];
+  for (const [flip, offset] of [[false, 30], [false, 44], [true, 30], [true, 44], [false, 58], [true, 58]]) {
+    out.push(tripleGlyph(from, to, detent, { flip, offset }));
+  }
+  return out;
+}
+
+// Distance between two segments (sampled).
+function segSegDist(p1, q1, p2, q2) {
+  const pointSeg = (pt, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy || 1;
+    const t = Math.min(1, Math.max(0, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / len2));
+    return Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy));
+  };
+  let m = Infinity;
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    m = Math.min(m,
+      pointSeg({ x: p1.x + t * (q1.x - p1.x), y: p1.y + t * (q1.y - p1.y) }, p2, q2),
+      pointSeg({ x: p2.x + t * (q2.x - p2.x), y: p2.y + t * (q2.y - p2.y) }, p1, q1));
+  }
+  return m;
+}
+
+// How much room a whole glyph (its three edges and its three digits) leaves
+// round the obstacles.
+function glyphClear(g, obstacles) {
+  const edges = [{ p: g.a, q: g.b }, { p: g.b, q: g.v }, { p: g.v, q: g.a }];
+  const boxes = g.labels.map(l => labelBox(l.x, l.y, 16, l.anchor));
+  let clear = Infinity;
+  for (const sg of obstacles.segments) {
+    for (const e of edges) clear = Math.min(clear, segSegDist(e.p, e.q, sg.p, sg.q));
+    for (const bx of boxes) clear = Math.min(clear, boxSegDist(bx, sg.p, sg.q));
+  }
+  for (const ob of obstacles.boxes) for (const bx of boxes) clear = Math.min(clear, boxGap(bx, ob));
+  return clear;
+}
+
+const GLYPH_CLEAR_GOOD = 6;
+
+// The first candidate with room; failing that, the one with the most.
+function pickGlyph(candidates, obstacles) {
+  const scored = candidates.map(g => ({ g, clear: glyphClear(g, obstacles) }));
+  const good = scored.find(c => c.clear >= GLYPH_CLEAR_GOOD);
+  if (good) return good.g;
+  return scored.reduce((best, c) => (c.clear > best.clear + 1e-9 ? c : best)).g;
+}
+
+// Where everything goes, as a pure function of the state and the step, so a test
+// can sweep it without a DOM. The shapes are placed first and the labels after,
+// so each label can see every shape it must keep clear of.
+//   arrow       { from, to } of the force, in px, or null
+//   glyph       the 3-4-5 triangle, or null
+//   leverSeg    { p, q } of the lever arm, or null (also null when r = 0)
+//   arcSegs     the torque arc as a polyline (reveal only)
+//   forceLabel  { x, y, anchor, w, clear } for "F", or null
+//   leverLabel  likewise for "r"
+function layoutScene(s, step) {
+  const d = derive(s);
+  const pivotPx = s.pivot ? toPx(s.pivot) : null;
+  const bt = toPx({ x: -2.5, y: 0.25 }), bb = toPx({ x: 2.5, y: -0.25 });
+  const beamBox = { x0: bt.x, y0: bt.y, x1: bb.x, y1: bb.y };
+  const arrow = s.forcePoint && d.F ? arrowPx(s.forcePoint, d.F) : null;
+  const detent = s.force ? detentAt(s.force.angle) : null;
+  const leverSeg = pivotPx && d.r && (d.r.x !== 0 || d.r.y !== 0)
+    ? { p: pivotPx, q: d.rValid ? toPx(s.forcePoint) : toPx(s.rTip) } : null;
+  const arcSegs = step === 'reveal' && pivotPx ? arcSegments(pivotPx, d.truth) : [];
+  const glyph = arrow && detent && detent.kind === 'triple'
+    ? pickGlyph(glyphCandidates(arrow.from, arrow.to, detent), {
+        segments: [...arcSegs, { p: arrow.from, q: arrow.to }, ...(leverSeg ? [leverSeg] : [])],
+        boxes: [] })
+    : null;
+
+  const around = { segments: [...arcSegs], boxes: [], beam: beamBox };
+  if (glyph) {
+    around.segments.push({ p: glyph.a, q: glyph.b }, { p: glyph.b, q: glyph.v }, { p: glyph.v, q: glyph.a });
+    for (const l of glyph.labels) around.boxes.push(labelBox(l.x, l.y, 16, l.anchor));
+  }
+
+  let forceLabel = null;
+  if (arrow) {
+    forceLabel = pickLabel(forceLabelCandidates(arrow.from, arrow.to), {
+      segments: [...around.segments, { p: arrow.from, q: arrow.to }, ...(leverSeg ? [leverSeg] : [])],
+      boxes: around.boxes, beam: beamBox });
+  }
+  let leverLabel = null;
+  if (leverSeg) {
+    leverLabel = pickLabel(leverLabelCandidates(leverSeg.p, leverSeg.q), {
+      segments: [...around.segments, ...(arrow ? [{ p: arrow.from, q: arrow.to }] : [])],
+      boxes: [...around.boxes, ...(forceLabel ? [labelBox(forceLabel.x, forceLabel.y, forceLabel.w, forceLabel.anchor)] : [])],
+      beam: beamBox });
+  }
+  return { d, pivotPx, arrow, glyph, leverSeg, arcSegs, forceLabel, leverLabel };
+}
+
+// --- drawing ----------------------------------------------------------------
+function createScene(svg) {
+  const defs = el('defs', {}, svg);
+  for (const [key, color] of [['force', COLORS.force], ['lever', COLORS.lever],
+                              ['warn', COLORS.warn], ['torque', COLORS.torque]]) {
+    const m = el('marker', {
+      id: `head-${key}`, viewBox: '0 0 10 10', refX: 8, refY: 5,
+      markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse'
+    }, defs);
+    el('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: color }, m);
+  }
+  const drawRoot = el('g', {}, svg);
+  const handleRoot = el('g', {}, svg);
+
+  let latest = null;
+  let prevStep = null;
+  let pose = 0;                 // the beam's current swing, in SVG degrees
+  let frame = null;
+
+  function reducedMotion() {
+    return typeof window.matchMedia === 'function' &&
+           window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function stopSwing(toPose) {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+    pose = toPose;
+  }
+
+  function startSwing() {
+    stopSwing(0);
+    const target = swingTarget(derive(latest.s).truth);
+    if (target === 0 || reducedMotion()) { pose = target; return; }
+    const t0 = performance.now();
+    const tick = now => {
+      const t = (now - t0) / SWING_MS;
+      pose = target * easeOut(t);
+      draw();
+      frame = t < 1 ? requestAnimationFrame(tick) : null;
+    };
+    frame = requestAnimationFrame(tick);
+  }
+
+  function handle(kind, px, color, cls) {
+    const g = el('g', { class: `handle ${cls}`, 'data-h': kind,
+                        transform: `translate(${px.x} ${px.y})` }, handleRoot);
+    el('circle', { class: 'hit', r: 22, fill: 'transparent' }, g);
+    el('circle', { class: 'dot', r: 8, fill: '#fff', stroke: color, 'stroke-width': 3 }, g);
+  }
+
+  function draw() {
+    const { s, view } = latest;
+    const step = view.step, drag = view.drag;
+    const { d, pivotPx, arrow, glyph, leverSeg, forceLabel, leverLabel } = layoutScene(s, step);
+    clear(drawRoot);
+    clear(handleRoot);
+
+    const armed = step === 'place' || step === 'aim' || step === 'pivot' || step === 'draw';
+
+    // the ghost of the beam where it started, once it has moved
+    if (Math.abs(pose) > 0.01) {
+      const top = toPx({ x: -2.5, y: 0.25 }), bot = toPx({ x: 2.5, y: -0.25 });
+      el('rect', { x: top.x, y: top.y, width: bot.x - top.x, height: bot.y - top.y,
+                   fill: 'none', stroke: COLORS.annot, 'stroke-width': 2,
+                   'stroke-dasharray': '6 5' }, drawRoot);
+    }
+
+    // the beam, turning about the pivot
+    const beam = el('g', { class: `beam${armed ? ' beam--armed' : ''}` }, drawRoot);
+    if (pivotPx && Math.abs(pose) > 0.01) {
+      beam.setAttribute('transform', `rotate(${pose} ${pivotPx.x} ${pivotPx.y})`);
+    }
+    for (const r of beamRects()) {
+      const p0 = toPx({ x: r.x0, y: r.y1 }), p1 = toPx({ x: r.x1, y: r.y0 });
+      el('rect', {
+        class: r.role === 'web' ? 'beam-web' : 'beam-flange',
+        x: p0.x, y: p0.y, width: p1.x - p0.x, height: p1.y - p0.y,
+        fill: r.role === 'web' ? COLORS.beam : COLORS.flange,
+        stroke: COLORS.ink, 'stroke-width': 1.5
+      }, beam);
+    }
+
+    // the force arrow, its label, and the 3-4-5 triangle when it applies
+    if (arrow) {
+      const { from, to } = arrow;
+      el('line', { x1: from.x, y1: from.y, x2: to.x, y2: to.y, stroke: COLORS.force,
+                   'stroke-width': 4, 'marker-end': 'url(#head-force)' }, drawRoot);
+      const lp = forceLabel;
+      text(drawRoot, lp.x, lp.y, 'F', { fill: COLORS.force, weight: 700, italic: true, anchor: lp.anchor, size: 17 });
+      if (glyph) {
+        el('polygon', { points: `${glyph.a.x},${glyph.a.y} ${glyph.b.x},${glyph.b.y} ${glyph.v.x},${glyph.v.y}`,
+                        fill: 'none', stroke: COLORS.ink, 'stroke-width': 2,
+                        'stroke-linejoin': 'round' }, drawRoot);
+        for (const l of glyph.labels) text(drawRoot, l.x, l.y, l.text, { size: 12, weight: 600, anchor: l.anchor });
+      }
+    }
+
+    // the lever arm: solid when it reaches the force point, dashed amber when not
+    if (leverSeg) {
+      const color = d.rValid ? COLORS.lever : COLORS.warn;
+      el('line', { x1: leverSeg.p.x, y1: leverSeg.p.y, x2: leverSeg.q.x, y2: leverSeg.q.y, stroke: color,
+                   'stroke-width': 4, 'stroke-dasharray': d.rValid ? null : '8 5',
+                   'marker-end': `url(#head-${d.rValid ? 'lever' : 'warn'})` }, drawRoot);
+      text(drawRoot, leverLabel.x, leverLabel.y, 'r', { fill: color, weight: 700, italic: true, anchor: leverLabel.anchor, size: 17 });
+    }
+
+    // the sense of rotation, once revealed
+    if (step === 'reveal' && pivotPx) {
+      const arc = torqueArc(pivotPx, d.truth);
+      if (arc) {
+        el('path', { d: arc.d, fill: 'none', stroke: COLORS.torque, 'stroke-width': 4,
+                     'marker-end': 'url(#head-torque)' }, drawRoot);
+      }
+    }
+
+    // handles: the markers themselves, and the things a press can grab
+    if (s.forcePoint) {
+      const live = step === 'aim';
+      handle('force', toPx(s.forcePoint), COLORS.force,
+             `${live ? '' : 'handle--idle'}${drag === 'force' ? ' handle--active' : ''}`);
+    }
+    if (pivotPx) {
+      const live = step === 'draw';
+      handle('pivot', pivotPx, COLORS.ink,
+             `${live ? '' : 'handle--idle'}${drag === 'r' ? ' handle--active' : ''}`);
+    }
+    if (s.rTip && !d.rValid) {
+      handle('rtip', toPx(s.rTip), COLORS.warn, drag === 'r' ? 'handle--active' : '');
+    }
+  }
+
+  function render(s, view) {
+    latest = { s, view };
+    if (shouldStartSwing(prevStep, view.step)) startSwing();
+    else if (view.step !== 'reveal' && prevStep === 'reveal') stopSwing(0);
+    prevStep = view.step;
+    draw();
+  }
+
+  function replay() {
+    if (!latest || latest.view.step !== 'reveal') return;
+    startSwing();
+    draw();
+  }
+
+  return { render, replay };
+}
+
+// ===== interact.js =====
+
+
+
+
+// What a press does, decided from the step, the handle under the pointer (if any)
+// and where it landed. Pure, so every row of the table can be tested.
+//   'place' -> set the force point and start aiming
+//   'aim'   -> start aiming from the existing force point
+//   'pivot' -> set the pivot and start drawing r
+//   'draw'  -> start drawing r from the existing pivot (or its dragged tip)
+//   'none'  -> nothing; in particular, the predict and reveal steps ignore the beam
+function decidePress({ step, handle, world }) {
+  if (handle === 'force' && step === 'aim') return 'aim';
+  if ((handle === 'pivot' || handle === 'rtip') && step === 'draw') return 'draw';
+  if (!hitBeam(world)) return 'none';
+  if (step === 'place' || step === 'aim') return 'place';
+  if (step === 'pivot' || step === 'draw') return 'pivot';
+  return 'none';
+}
+
+// Capture must be confirmed BEFORE a drag is latched. If it throws, a latched
+// drag would be live but uncaptured: a pointerup outside the svg would never
+// reach us, and a bare mouse move would keep dragging with no button held.
+function tryCapture(svg, pointerId) {
+  try {
+    svg.setPointerCapture(pointerId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createInteraction(svg, state, hooks) {
+  let drag = null;
+  let dragPointerId = null;
+
+  function setDrag(kind) {
+    drag = kind;
+    hooks.onDrag(kind);
+  }
+
+  function endDrag(e) {
+    if (!drag || e.pointerId !== dragPointerId) return;
+    if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+    dragPointerId = null;
+    setDrag(null);
+  }
+
+  svg.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;                       // right and middle clicks never drag
+    // A second finger must not take over a drag already in progress, nor reach the auto-r
+    // branch below (which clears dragPointerId and would strand `drag`). The SAME pointer
+    // pressing again simply starts afresh.
+    if (drag !== null && e.pointerId !== dragPointerId) return;
+    const handleEl = e.target.closest ? e.target.closest('[data-h]') : null;
+    const world = toWorld(clientToSvg(svg, e.clientX, e.clientY));
+    const step = deriveStep(state.getState(), drag);
+    const action = decidePress({
+      step, handle: handleEl ? handleEl.getAttribute('data-h') : null, world
+    });
+    if (action === 'none') return;
+    if (!tryCapture(svg, e.pointerId)) return;        // no capture, no drag
+    e.preventDefault();
+    dragPointerId = e.pointerId;
+    if (action === 'place') {
+      state.setForcePoint(world);
+      setDrag('force');
+    } else if (action === 'aim') {
+      setDrag('force');
+    } else if (action === 'pivot') {
+      state.setPivot(world);
+      if (state.getState().rTip) {                    // pivot on the force point: r = 0, nothing to draw
+        svg.releasePointerCapture(e.pointerId);
+        dragPointerId = null;
+        return;
+      }
+      setDrag('r');
+    } else {
+      setDrag('r');
+    }
+  });
+
+  svg.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== dragPointerId) return;
+    const world = toWorld(clientToSvg(svg, e.clientX, e.clientY));
+    const s = state.getState();
+    if (drag === 'force') state.setForce(aimFromPointer(s.forcePoint, world));
+    else state.setRTip(leverTipFromPointer(s.pivot, world));
+  });
+
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+  svg.addEventListener('lostpointercapture', endDrag);
+
+  return { getDrag: () => drag };
+}
+
+// ===== app.js =====
+
+
+
+
+
+
+const state = createState();
+let drag = null;
+
+const els = {
+  scene: document.getElementById('scene-svg'),
+  panel: document.getElementById('panel'),
+  steps: document.getElementById('steps'),
+  instruction: document.getElementById('instruction'),
+  answers: Array.from(document.querySelectorAll('[data-answer]')),
+  back: document.getElementById('back'),
+  newProblem: document.getElementById('new-problem'),
+  replay: document.getElementById('replay'),
+  sameForce: document.getElementById('same-force')
+};
+
+const scene = createScene(els.scene);
+const panel = createPanel(els.panel);
+createInteraction(els.scene, state, {
+  onDrag: kind => {
+    drag = kind;
+    renderAll(state.getState());
+  }
+});
+
+const stepItems = STEPS.map(key => {
+  const li = document.createElement('li');
+  li.textContent = STEP_LABELS[key];
+  els.steps.appendChild(li);
+  return li;
+});
+
+function renderAll(s) {
+  const step = deriveStep(s, drag);
+  const d = derive(s);
+  scene.render(s, { step, drag });
+  panel.render(s, step);
+  els.instruction.textContent = instruction(step, s);
+
+  const at = STEPS.indexOf(step);
+  stepItems.forEach((li, i) => {
+    li.className = i < at ? 'is-done' : i === at ? 'is-current' : 'is-next';
+    if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+  });
+
+  for (const b of els.answers) {
+    const picked = s.prediction === b.dataset.answer;
+    b.disabled = step !== 'predict';
+    b.classList.toggle('is-selected', picked);
+    b.classList.toggle('is-right', picked && d.correct === true);
+    b.classList.toggle('is-wrong', picked && d.correct === false);
+    b.setAttribute('aria-pressed', String(picked));
+  }
+  const empty = !s.forcePoint;
+  els.back.disabled = empty;
+  els.newProblem.disabled = empty;
+  els.replay.hidden = step !== 'reveal';
+  els.sameForce.hidden = step !== 'reveal';
+}
+
+for (const b of els.answers) b.addEventListener('click', () => state.setPrediction(b.dataset.answer));
+els.back.addEventListener('click', () => state.back());
+els.newProblem.addEventListener('click', () => state.reset());
+els.sameForce.addEventListener('click', () => state.sameForceNewPivot());
+els.replay.addEventListener('click', () => scene.replay());
+
+state.subscribe(renderAll);
+renderAll(state.getState());
+
+
+})();
+</script>
+</body>
+</html>
