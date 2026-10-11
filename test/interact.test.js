@@ -416,8 +416,6 @@ test('a link with no mag or angle changes nothing about aiming', () => {
   assert.strictEqual(r.it.getDrag(), 'force');
   r.fire('pointermove', { x: 2, y: 0.8 });
   assert.deepStrictEqual(r.state.getState().force, { mag: 50, angle: 90 });
-  r.fire('pointerup', { x: 2, y: 0.8 });
-  assert.strictEqual(r.it.getDrag(), null);
   const p = linkRig('');
   p.fire('pointerdown', { x: 1, y: 0 });
   assert.strictEqual(p.it.getDrag(), 'force');

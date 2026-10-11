@@ -1400,6 +1400,15 @@ function createInteraction(svg, state, hooks) {
     setDrag(null);
   }
 
+  // A link that fixes both the size and the direction completes the force with the press itself:
+  // nothing is left to drag, so release at once and latch nothing (like the auto-r branch below).
+  function completesLockedForce(e) {
+    if (!(hooks.completeLocked && hooks.completeLocked())) return false;
+    svg.releasePointerCapture(e.pointerId);
+    dragPointerId = null;
+    return true;
+  }
+
   svg.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;                       // right and middle clicks never drag
     // A second finger must not take over a drag already in progress, nor reach the auto-r
@@ -1416,15 +1425,12 @@ function createInteraction(svg, state, hooks) {
     if (!tryCapture(svg, e.pointerId)) return;        // no capture, no drag
     e.preventDefault();
     dragPointerId = e.pointerId;
-    if (action === 'place' || action === 'aim') {
-      if (action === 'place') state.setForcePoint(world);
-      // A link that fixes both the size and the direction completes the force with this press:
-      // nothing is left to drag, so release at once and latch nothing (like the auto-r branch below).
-      if (hooks.completeLocked && hooks.completeLocked()) {
-        svg.releasePointerCapture(e.pointerId);
-        dragPointerId = null;
-        return;
-      }
+    if (action === 'place') {
+      state.setForcePoint(world);
+      if (completesLockedForce(e)) return;
+      setDrag('force');
+    } else if (action === 'aim') {
+      if (completesLockedForce(e)) return;
       setDrag('force');
     } else if (action === 'pivot') {
       state.setPivot(world);
