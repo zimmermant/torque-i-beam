@@ -14,6 +14,34 @@ Open `dist/torque_i_beam.html` in any browser. It is one self-contained file: no
 
 Conventions: metres, newtons, y up, angles counterclockwise from +x, counterclockwise torque positive. The beam's own weight and gravity are ignored.
 
+## Presetting a problem from the link
+
+Add optional query parameters to the page's address to start a problem part-way set up. Any combination works; anything you leave out behaves exactly as usual.
+
+| Parameter | Meaning | Accepted text |
+|---|---|---|
+| `fp` | force location, metres | `x` or `x,y` (y omitted means 0) |
+| `mag` | force magnitude, newtons | a number |
+| `angle` | force direction, degrees counterclockwise from +x | a number |
+| `pivot` | pivot location, metres | `x` or `x,y` (y omitted means 0) |
+
+Numbers are plain decimals (`-1`, `+2.5`, `.5`; no exponents, no hex). A value that does not parse is ignored, as if it were absent. If a parameter is repeated, the first one counts. Unknown parameters are ignored.
+
+Values are **snapped exactly as a click or drag would snap them**: locations to the 0.25 m grid and onto the beam, the magnitude to whole newtons between 10 and 100, the angle to the nearest of the 24 directions. A "From the link" line under the instruction lists what was set, what snapping changed (for example `mag 500 → 100`) and what was ignored.
+
+- **`fp`** places the force point when the page loads.
+- **`mag` and `angle` are locked** for that problem. The student's aim drag chooses only what is not locked (distance sets the size, direction sets the angle; a drag under 12 px still means "not aimed"). If both are locked, the force is complete as soon as it has a point: at load when `fp` is given, otherwise one press on the beam (no drag) places the point and applies the force. After **Back**, pressing the force point applies it again.
+- **`pivot`** is applied once, when the student reaches the pivot step (so it waits for a complete force, and is never applied in the middle of a drag). It never presets r: the student still draws it. A pivot on the force point goes straight to the prediction, as it does when clicked.
+- Presets apply **once**. Back, "Same force, new pivot" and moving the force point never re-apply them. **New problem** clears the locks and the "From the link" line and gives a fully ordinary blank problem; reloading the link restores the setup.
+
+Examples (the query string is kept for a `file://` page as well as a served one):
+
+```
+torque_i_beam.html?fp=1.5,0&mag=50&angle=90&pivot=-1,0     # a finished setup: just draw r and predict
+torque_i_beam.html?mag=50                                  # any force point, any direction, always 50 N
+torque_i_beam.html?angle=45&pivot=0                        # student sets the point and the size
+```
+
 ## Develop
 
 ```bash
@@ -35,10 +63,11 @@ To check the real page, serve the repo root (`python3 -m http.server 8742 --bind
 | `svg.js` | `el` / `clear` / `text` / `clientToSvg`, and the colour palette. |
 | `geometry.js` | The beam, the 0.25 m grid, the world <-> screen conversion (`toPx` / `toWorld`, where y is flipped), hit-testing. A few drawing helpers in `scene.js` (`arrowPx`, `tripleGlyph`, `torqueArc`) also work in screen coordinates and flip y themselves. |
 | `state.js` | Five stored inputs; everything else is `derive()`d. |
-| `steps.js` | The current step, its instruction, and `controlsView` (which controls are enabled, marked or hidden), derived from the data. |
+| `presets.js` | URL presets: `parsePresets` (parse and snap `fp`, `mag`, `angle`, `pivot`), `describePresets`, and `createPresets` (the locks and the pending pivot, held outside the state). |
+| `steps.js` | The current step, its instruction (worded for locked values), and `controlsView` (which controls are enabled, marked or hidden), derived from the data. |
 | `panel.js` | The side panel, as a pure string. |
 | `scene.js` | A pure `layoutScene`, the SVG drawing, and the swing. |
-| `interact.js` | Pointer handling. `decidePress` is pure. |
+| `interact.js` | Pointer handling. `decidePress` is pure. Two optional hooks (`lockAim`, `completeLocked`) let a link fix the force's size and direction. |
 | `app.js` | The wiring: builds the state, scene, panel and pointer handling, and applies `controlsView` on every change. Verified in the browser. |
 
 ## Rules this codebase keeps

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { strip, scanForDuplicates, main } from '../build.js';
 
 // build.js only calls main() when it is the program node was invoked on (see
@@ -155,5 +156,22 @@ test('main() builds a byte-reproducible bundle, without touching the committed d
   } finally {
     rmSync(dirA, { recursive: true, force: true });
     rmSync(dirB, { recursive: true, force: true });
+  }
+});
+
+// A module that is in src/ but not in build.js's MODULES list is silently missing from the shipped
+// page (its functions are undefined at run time). The list is read from the directory here, not
+// from the build's own list, so a forgotten module cannot hide.
+test('main() inlines every src/*.js module', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const modules = readdirSync(join(here, '..', 'src')).filter(f => f.endsWith('.js')).sort();
+  assert.ok(modules.includes('presets.js'), 'the directory listing found the new module');
+  const dir = mkdtempSync(join(tmpdir(), 'torque-i-beam-build-c-'));
+  try {
+    main(dir);
+    const html = readFileSync(join(dir, 'torque_i_beam.html'), 'utf8');
+    for (const m of modules) assert.ok(html.includes(`// ===== ${m} =====`), `${m} is missing from the built page`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
