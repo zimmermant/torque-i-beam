@@ -13,16 +13,14 @@ function deepFreeze(o) {
 }
 
 // --- parsePresets ------------------------------------------------------------
-// Mutation: an absent parameter is read as present-but-empty (`raw === undefined`
-// instead of `raw === null` -- URLSearchParams.get returns null for a missing key), so
-// every link would report four ignored parameters.
+// Mutation: the search string is used without the `|| ''` guard (search.toString() throws on
+// undefined and null, which a caller with no link may pass).
 test('parsePresets: no link, no search, an empty search and a bare "?" all mean nothing is set', () => {
   for (const search of [undefined, null, '', '?']) assert.deepStrictEqual(parsePresets(search), EMPTY, String(search));
   assert.deepStrictEqual(parsePresets('?unrelated=1&x=2'), EMPTY, 'unknown parameters are ignored silently');
 });
 
-// Mutations: a one-number location gets y = 0.25 instead of 0; pivot read from the fp
-// parameter; mag read from the angle parameter.
+// Mutation: a one-number location gets y = 0.25 instead of 0.
 test('parsePresets: each parameter on its own, with and without the leading "?"', () => {
   assert.deepStrictEqual(parsePresets('?fp=1.5'), { ...EMPTY, fp: { x: 1.5, y: 0 } });
   assert.deepStrictEqual(parsePresets('fp=1.5,0.25'), { ...EMPTY, fp: { x: 1.5, y: 0.25 } });
@@ -34,7 +32,7 @@ test('parsePresets: each parameter on its own, with and without the leading "?"'
     { ...EMPTY, fp: { x: 1, y: 0 }, mag: 50, angle: 0, pivot: { x: 2, y: 0 } });
 });
 
-// Mutations: the text is not trimmed; the number pattern loses its optional sign.
+// Mutations: the text is not trimmed; a leading plus sign is refused.
 test('parsePresets: whitespace is trimmed, and signs, decimals and a bare ".5" or "5." are numbers', () => {
   assert.deepStrictEqual(parse(['fp', ' 1.5 , -0.25 ']), { ...EMPTY, fp: { x: 1.5, y: -0.25 } });
   assert.deepStrictEqual(parse(['pivot', '+2,.25']), { ...EMPTY, pivot: { x: 2, y: 0.25 } });
