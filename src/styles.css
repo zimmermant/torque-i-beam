@@ -24,7 +24,7 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .steps li.is-current { background: #111827; border-color: #111827; color: #fff; }
 
 .instruction { margin: 0 0 12px; min-height: 22px; font-size: 15px; font-weight: 600; }
-.from-link { margin: -6px 0 12px; font-size: 13px; color: #555b66; }
+.from-link { margin: -6px 0 12px; font-size: 13px; color: #555b66; overflow-wrap: anywhere; }
 .from-link[hidden] { display: none; }
 
 .layout {

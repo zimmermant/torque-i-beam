@@ -52,7 +52,8 @@ test('parsePresets: every invalid form is ignored, with the exact text and the f
     for (const raw of BAD) {
       const p = parse([key, raw]);
       assert.strictEqual(p[key], null, `${key}=${JSON.stringify(raw)} must leave ${key} null`);
-      assert.deepStrictEqual(p.ignored, [`${key}=${raw} (${HINT[key]})`], `${key}=${JSON.stringify(raw)}`);
+      const echo = raw.length > 40 ? raw.slice(0, 40) + '\u2026' : raw;          // a long value is cut (tested below)
+      assert.deepStrictEqual(p.ignored, [`${key}=${echo} (${HINT[key]})`], `${key}=${JSON.stringify(raw)}`);
       assert.deepStrictEqual(p.adjusted, []);
     }
   }
@@ -331,4 +332,97 @@ test('createPresets: bothLocked needs both, and an angle of 0 counts', () => {
   assert.strictEqual(both('?mag=50&angle=90'), true);
   assert.strictEqual(both('?mag=50&angle=0'), true);
   assert.deepStrictEqual(createPresets(parsePresets('?angle=0')).getLocks(), { mag: null, angle: 0 });
+});
+
+// --- the fix wave ------------------------------------------------------------------
+// completeLocked(state): the whole hook, so a press in the real app does exactly this.
+// Mutations: the arguments are swapped (mag 40 and angle 30 would become 30 N at 40 degrees,
+// which snaps to a different force); the forcePoint guard is removed (true without a force);
+// `return true` becomes `return false`; the bothLocked guard is removed (a single lock would
+// complete a force whose other half is invented).
+test('completeLocked: with both locked and a force point it sets exactly the locked force and says so', () => {
+  const state = createState();
+  state.setForcePoint({ x: 1, y: 0 });
+  const presets = createPresets(parsePresets('?mag=40&angle=30'));
+  assert.strictEqual(presets.completeLocked(state), true);
+  assert.deepStrictEqual(state.getState().force, { mag: 40, angle: 30 });
+  assert.deepStrictEqual(state.getState().forcePoint, { x: 1, y: 0 });
+  assert.strictEqual(deriveStep(state.getState(), null), 'pivot');
+});
+
+test('completeLocked: with no force point it returns false and leaves the state alone', () => {
+  const state = createState();
+  const presets = createPresets(parsePresets('?mag=40&angle=30'));
+  assert.strictEqual(presets.completeLocked(state), false);
+  assert.deepStrictEqual(state.getState(), { forcePoint: null, force: null, pivot: null, rTip: null, prediction: null });
+});
+
+test('completeLocked: with only one thing locked, or nothing, it returns false and leaves the state alone', () => {
+  for (const search of ['?mag=40', '?angle=30', '?angle=0', '', '?fp=1,0&pivot=0']) {
+    const state = createState();
+    state.setForcePoint({ x: 1, y: 0 });
+    const before = JSON.stringify(state.getState());
+    assert.strictEqual(createPresets(parsePresets(search)).completeLocked(state), false, search);
+    assert.strictEqual(JSON.stringify(state.getState()), before, search);
+  }
+});
+
+test('completeLocked: after clear() it no longer completes anything', () => {
+  const state = createState();
+  state.setForcePoint({ x: 1, y: 0 });
+  const presets = createPresets(parsePresets('?mag=40&angle=30'));
+  presets.clear();
+  assert.strictEqual(presets.completeLocked(state), false);
+  assert.strictEqual(state.getState().force, null);
+});
+
+// Mutation: the number pattern is the ambiguous one again, (\d+\.?\d*|\.\d+), which backtracks
+// quadratically on a long digit string with a bad last character (60,000 digits took seconds).
+test('parsePresets: a very long digit string with a bad last character is refused quickly', () => {
+  const raw = '9'.repeat(60000) + 'x';
+  const t0 = performance.now();
+  const p = parse(['mag', raw]);
+  const ms = performance.now() - t0;
+  assert.strictEqual(p.mag, null);
+  assert.strictEqual(p.ignored.length, 1);
+  assert.ok(ms < 250, `took ${ms.toFixed(0)} ms`);
+  const t1 = performance.now();
+  const q = parse(['fp', '1'.repeat(60000) + 'x']);
+  assert.strictEqual(q.fp, null);
+  assert.ok(performance.now() - t1 < 250, 'a location too');
+});
+
+// Mutation: the leading U+2212 is not turned into a hyphen before the number test.
+test('parsePresets: a pasted minus sign (U+2212) is a minus, in every number including the one after the comma', () => {
+  assert.deepStrictEqual(parse(['pivot', '\u22121,0']), { ...EMPTY, pivot: { x: -1, y: 0 } });
+  assert.deepStrictEqual(parse(['fp', '0.5,\u22120.25']), { ...EMPTY, fp: { x: 0.5, y: -0.25 } });
+  assert.strictEqual(parse(['angle', '\u221245']).angle, 315);
+  assert.deepStrictEqual(parse(['mag', '\u221220']).adjusted, ['mag \u221220 \u2192 10']);
+  assert.strictEqual(parse(['pivot', '\u2212-1']).pivot, null, 'only one minus: a doubled sign is still refused');
+  assert.strictEqual(parse(['pivot', '1\u22121']).pivot, null, 'and only a leading one');
+});
+
+// Mutation: the raw text is echoed in full.
+test('parsePresets: a long ignored value is cut to 40 characters and an ellipsis; a short one is echoed whole', () => {
+  const long = parse(['mag', 'a'.repeat(2000)]);
+  assert.deepStrictEqual(long.ignored, [`mag=${'a'.repeat(40)}\u2026 (use a number of newtons)`]);
+  assert.ok(long.ignored[0].length < 80);
+  assert.deepStrictEqual(parse(['mag', 'a'.repeat(40)]).ignored, [`mag=${'a'.repeat(40)} (use a number of newtons)`]);
+  assert.deepStrictEqual(parse(['fp', 'a'.repeat(41)]).ignored, [`fp=${'a'.repeat(40)}\u2026 (use x,y in metres)`]);
+  assert.ok(describePresets(long).length < 160);
+});
+
+// Mutations: a location is noted when only the unrounded numbers differ (the note would read
+// "(0, 0) -> (0, 0)"); the same for a magnitude ("50 -> 50").
+test('parsePresets: a snap too small to show is not noted, and a visible one still is', () => {
+  const a = parse(['fp', '-0.001']);
+  assert.deepStrictEqual(a.fp, { x: 0, y: 0 });
+  assert.deepStrictEqual(a.adjusted, []);
+  const b = parse(['mag', '49.999']);
+  assert.strictEqual(b.mag, 50);
+  assert.deepStrictEqual(b.adjusted, []);
+  assert.deepStrictEqual(parse(['pivot', '0.001,-0.001']).adjusted, []);
+  assert.deepStrictEqual(parse(['fp', '1.1,0']).adjusted, ['fp (1.1, 0) \u2192 (1, 0)']);
+  assert.deepStrictEqual(parse(['mag', '500']).adjusted, ['mag 500 \u2192 100']);
+  assert.deepStrictEqual(parse(['mag', '37.4']).adjusted, ['mag 37.4 \u2192 37']);
 });

@@ -299,10 +299,10 @@ test('Back during an r drag: later moves are harmless and the release still ends
 });
 
 // --- URL presets: the lock hooks, driven through the same fake svg -----------------
-// linkRig mirrors app.js's wiring (the controller's lockAim, the completeLocked hook from the
-// brief, and a single sync that settles the pending pivot before it renders), so what the
-// student can do with a link is exercised through the real pointer handlers. app.js itself
-// has no DOM-free test; template.test.js pins its wiring text and the browser checks the rest.
+// linkRig mirrors app.js's wiring: the REAL controller's lockAim and completeLocked(state) (app.js
+// only forwards to them), and a single sync that settles the pending pivot before it renders, so what
+// the student can do with a link is exercised through the real pointer handlers. app.js itself has no
+// DOM-free test; template.test.js pins its wiring text and the browser checks the rest.
 function linkRig(search, opts) {
   const state = createState();
   const presets = createPresets(parsePresets(search));
@@ -316,14 +316,7 @@ function linkRig(search, opts) {
   const it = createInteraction(svg, state, {
     onDrag: kind => { drag = kind; sync(); },
     lockAim: aim => presets.lockAim(aim),
-    completeLocked: () => {
-      if (!presets.bothLocked()) return false;
-      const L = presets.getLocks();
-      const s = state.getState();
-      if (!s.forcePoint) return false;
-      state.setForce({ mag: L.mag, angle: L.angle });
-      return true;
-    }
+    completeLocked: () => presets.completeLocked(state)
   });
   presets.start(state);
   state.subscribe(sync);
@@ -406,8 +399,8 @@ test('an angle in the link: a drag chooses only the magnitude (an angle of 0 inc
   assert.deepStrictEqual(z.state.getState().force, { mag: 50, angle: 0 });
 });
 
-// Mutations: completeLocked reports success when nothing is locked (so every press would apply
-// nothing and drop its drag); lockAim does not pass an unlocked aim through.
+// Mutations: completeLocked loses its bothLocked guard (a press with nothing locked would apply a
+// 10 N force and drop its drag); lockAim defaults an unlocked magnitude to 10 N.
 test('a link with no mag or angle changes nothing about aiming', () => {
   const r = linkRig('?fp=2,0&pivot=-2,0&x=1');                 // only a force point and a pivot
   assert.deepStrictEqual(r.state.getState().forcePoint, { x: 2, y: 0 });

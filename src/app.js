@@ -40,14 +40,7 @@ createInteraction(els.scene, state, {
   },
   lockAim: aim => presets.lockAim(aim),
   // Both size and direction fixed by the link: the press that has a force point completes the force.
-  completeLocked: () => {
-    if (!presets.bothLocked()) return false;
-    const L = presets.getLocks();
-    const s = state.getState();
-    if (!s.forcePoint) return false;
-    state.setForce({ mag: L.mag, angle: L.angle });
-    return true;
-  }
+  completeLocked: () => presets.completeLocked(state)
 });
 
 const stepItems = STEPS.map(key => {

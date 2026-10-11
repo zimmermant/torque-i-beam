@@ -77,5 +77,5 @@ test('app.js: the render passes the locks and the summary, and the interaction g
   assert.match(appJs, /els\.fromLink\.hidden = link === '';/);
   assert.match(appJs, /createPresets\(parsePresets\(window\.location\.search\)\)/);
   assert.match(appJs, /lockAim: aim => presets\.lockAim\(aim\)/);
-  assert.match(appJs, /completeLocked: \(\) => \{\s*if \(!presets\.bothLocked\(\)\) return false;/);
+  assert.match(appJs, /completeLocked: \(\) => presets\.completeLocked\(state\)/);
 });

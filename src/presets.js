@@ -9,7 +9,10 @@ import { deriveStep } from './steps.js';
 // Presets are UI-layer configuration held OUTSIDE the state: the state keeps its five inputs.
 // Every value goes through the same snapping as a click or a drag, and a change is reported.
 
-const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)$/;      // no exponent, no hex, no empty
+// No exponent, no hex, no empty. Written unambiguously (\d+(\.\d*)?, not \d+\.?\d*): the looser
+// form backtracks quadratically on a long digit string with a bad last character.
+const NUMBER = /^[+-]?(\d+(\.\d*)?|\.\d+)$/;
+const SHOWN_MAX = 40;                            // characters of a rejected value echoed back
 const ANGLE_TOL = 0.01;                          // degrees: typing 53.13 for the 3-4-5 detent is not a change
 const ORDER = ['fp', 'mag', 'angle', 'pivot'];
 const HINTS = {
@@ -18,7 +21,8 @@ const HINTS = {
 };
 
 function parseNumber(text) {
-  const t = text.trim();
+  // The page prints a real minus sign (U+2212), so a number pasted from the screen starts with one.
+  const t = text.trim().replace(/^\u2212/, '-');
   if (!NUMBER.test(t)) return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;          // 400 digits overflow to Infinity
@@ -44,7 +48,8 @@ function readLocation(name, text, out) {
   if (v === null) return false;
   const s = snapToGrid(v);
   out[name] = s;
-  if (s.x !== v.x || s.y !== v.y) out.adjusted.push(`${name} ${locText(v)} → ${locText(s)}`);
+  // Compare what would be PRINTED: a snap too small to show (-0.001 to 0) is no news.
+  if (locText(v) !== locText(s)) out.adjusted.push(`${name} ${locText(v)} → ${locText(s)}`);
   return true;
 }
 
@@ -53,7 +58,7 @@ function readMag(name, text, out) {
   if (n === null) return false;
   const s = snapMagnitude(n);
   out.mag = s;
-  if (s !== n) out.adjusted.push(`mag ${fmt(n)} → ${fmt(s)}`);
+  if (fmt(n) !== fmt(s)) out.adjusted.push(`mag ${fmt(n)} → ${fmt(s)}`);
   return true;
 }
 
@@ -68,13 +73,19 @@ function readAngle(name, text, out) {
 
 const READERS = { fp: readLocation, mag: readMag, angle: readAngle, pivot: readLocation };
 
+// A rejected value is echoed back, but a 2,000-character one would overflow the page.
+function shown(raw) {
+  const chars = Array.from(raw);
+  return chars.length > SHOWN_MAX ? chars.slice(0, SHOWN_MAX).join('') + '…' : raw;
+}
+
 export function parsePresets(search) {
   const q = new URLSearchParams(search || '');
   const out = { fp: null, mag: null, angle: null, pivot: null, adjusted: [], ignored: [] };
   for (const name of ORDER) {
     const raw = q.get(name);                      // the first duplicate wins; a missing key is null
     if (raw === null) continue;
-    if (!READERS[name](name, raw, out)) out.ignored.push(`${name}=${raw} (${HINTS[name]})`);
+    if (!READERS[name](name, raw, out)) out.ignored.push(`${name}=${shown(raw)} (${HINTS[name]})`);
   }
   return out;
 }
@@ -98,10 +109,11 @@ export function createPresets(parsed) {
   let locks = { mag: parsed.mag, angle: parsed.angle };
   let pending = parsed.pivot ? { x: parsed.pivot.x, y: parsed.pivot.y } : null;
   let summaryText = describePresets(parsed);
+  const bothLocked = () => locks.mag !== null && locks.angle !== null;
 
   return {
     getLocks: () => ({ mag: locks.mag, angle: locks.angle }),
-    bothLocked: () => locks.mag !== null && locks.angle !== null,
+    bothLocked,
     summary: () => summaryText,
 
     // Load-time presets. The pivot is NOT applied here: it waits for settle().
@@ -129,6 +141,15 @@ export function createPresets(parsed) {
       locks = { mag: null, angle: null };
       pending = null;
       summaryText = '';
+    },
+
+    // The press hook: when the link fixes BOTH the size and the direction and there is a force point,
+    // the force is complete. True means it set the force (the caller then latches no drag).
+    completeLocked(state) {
+      if (!bothLocked()) return false;
+      if (!state.getState().forcePoint) return false;
+      state.setForce({ mag: locks.mag, angle: locks.angle });
+      return true;
     },
 
     // `aim` is aimFromPointer's result. A too-short drag (null) stays "not aimed".
