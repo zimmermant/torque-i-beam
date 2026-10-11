@@ -4,7 +4,7 @@
 
 ### Summary
 
-Added optional query parameters that preset the force location (`fp=x[,y]`), force magnitude (`mag=N`), force direction (`angle=deg`) and pivot (`pivot=x[,y]`), per the approved design in `.superpowers/sdd/2026-10-10-torque-i-beam/urlpresets-brief.md`. New `src/presets.js` (`parsePresets`, `describePresets`, `createPresets`), optional `lockAim` / `completeLocked` hooks in `interact.js`, a third `locks` parameter on `steps.js` `instruction()`, a `sync()` in `app.js` that is now the only state subscriber, a `<p id="from-link">` line, and a README section. **196 tests** (was 148), **207 mutation rows** (was 124: 83 more), `--coverage --strict`: 196 of 196 tests made to fail by at least one mutation, exit 0 (raw output in `docs/superpowers/mutation-coverage-run.txt`). `dist/torque_i_beam.html` rebuilt (61,112 bytes by build.js's count). A review fix wave then followed (see the end of this entry).
+Added optional query parameters that preset the force location (`fp=x[,y]`), force magnitude (`mag=N`), force direction (`angle=deg`) and pivot (`pivot=x[,y]`), per the approved design in `.superpowers/sdd/2026-10-10-torque-i-beam/urlpresets-brief.md`. New `src/presets.js` (`parsePresets`, `describePresets`, `createPresets`), optional `lockAim` / `completeLocked` hooks in `interact.js`, a third `locks` parameter on `steps.js` `instruction()`, a `sync()` in `app.js` that is now the only state subscriber, a `<p id="from-link">` line, and a README section. **196 tests** (was 148), **209 mutation rows** (was 124: 85 more), `--coverage --strict`: 196 of 196 tests made to fail by at least one mutation, exit 0 (raw output in `docs/superpowers/mutation-coverage-run.txt`). `dist/torque_i_beam.html` rebuilt (61,112 bytes by build.js's count). A review fix wave then followed (see the end of this entry).
 
 ### Decisions made and why
 
@@ -29,7 +29,7 @@ Added optional query parameters that preset the force location (`fp=x[,y]`), for
 - A rejected value is echoed at most 40 characters long, then an ellipsis; `.from-link` wraps anywhere.
 - An `Adjusted` note is written only if the printed before and after differ (`fp=-0.001` and `mag=49.999` no longer read as no-ops).
 - Added the `textContent` -> `innerHTML` security row for the From-the-link line.
-- Final numbers: **196 tests**, **207 rows**, coverage 196 of 196.
+- Final numbers: **196 tests**, **209 rows**, coverage 196 of 196.
 
 ### Open questions / next steps
 

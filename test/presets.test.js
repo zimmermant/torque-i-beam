@@ -410,6 +410,9 @@ test('parsePresets: a long ignored value is cut to 40 characters and an ellipsis
   assert.deepStrictEqual(parse(['mag', 'a'.repeat(40)]).ignored, [`mag=${'a'.repeat(40)} (use a number of newtons)`]);
   assert.deepStrictEqual(parse(['fp', 'a'.repeat(41)]).ignored, [`fp=${'a'.repeat(40)}\u2026 (use x,y in metres)`]);
   assert.ok(describePresets(long).length < 160);
+  // The cut counts characters, not UTF-16 units: 41 emoji keep 40 whole ones (a unit cut would give 20).
+  const emoji = '\u{1F600}'.repeat(41);
+  assert.deepStrictEqual(parse(['mag', emoji]).ignored, [`mag=${'\u{1F600}'.repeat(40)}\u2026 (use a number of newtons)`]);
 });
 
 // Mutations: a location is noted when only the unrounded numbers differ (the note would read
