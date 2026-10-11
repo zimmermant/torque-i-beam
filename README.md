@@ -4,6 +4,8 @@ A teaching simulation. A student places a force on an I-beam, chooses a pivot, d
 
 Open `dist/torque_i_beam.html` in any browser. It is one self-contained file: no server, no network.
 
+Live: https://zimmermant.github.io/torque-i-beam/ (the root page redirects to the simulation, and the redirect drops any `?...` parameters, so a link with URL presets must point at `https://zimmermant.github.io/torque-i-beam/dist/torque_i_beam.html?mag=50&angle=90`).
+
 ## The flow
 
 1. **Place and aim the force.** Press on the beam, drag, release. The direction snaps to one of 24 common angles (0, 30, 45, 60, 90 and their mirrors, plus the 3-4-5 angles 36.87° and 53.13°); the size snaps to whole newtons, 10–100 N. A small black triangle appears when the force sits on a 3-4-5 angle.
