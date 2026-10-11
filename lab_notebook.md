@@ -1,5 +1,32 @@
 # Lab Notebook
 
+## 2026-10-11 - Optional URL presets (fp, mag, angle, pivot)
+
+### Summary
+
+Added optional query parameters that preset the force location (`fp=x[,y]`), force magnitude (`mag=N`), force direction (`angle=deg`) and pivot (`pivot=x[,y]`), per the approved design in `.superpowers/sdd/2026-10-10-torque-i-beam/urlpresets-brief.md`. New `src/presets.js` (`parsePresets`, `describePresets`, `createPresets`), optional `lockAim` / `completeLocked` hooks in `interact.js`, a third `locks` parameter on `steps.js` `instruction()`, a `sync()` in `app.js` that is now the only state subscriber, a `<p id="from-link">` line, and a README section. **188 tests** (was 148), **198 mutation rows** (was 124), `--coverage --strict`: 188 of 188 tests made to fail by at least one mutation, exit 0 (raw output in `docs/superpowers/mutation-coverage-run.txt`). `dist/torque_i_beam.html` rebuilt (60,157 bytes by build.js's count).
+
+### Decisions made and why
+
+- Presets are UI-layer configuration held in `createPresets`' closure, outside the state: the five stored inputs stay five (derive, never store).
+- Values go through the SAME snapping as a click or drag (`snapToGrid`, `snapMagnitude`, `snapAngle`); a change is reported in the "From the link" line. Angle notes compare modulo 360 with a 0.01 degree tolerance so 53.13, -45, 360 produce no note.
+- The pending pivot is applied by `settle(state, drag)` only when the DERIVED step is 'pivot' and no drag is in progress, and is consumed first. Mid-drag, a short wobble un-aims the force and clears the pivot, so applying it then would lose it.
+- `app.js`: `sync()` is the only subscriber; `if (presets.settle(state, drag)) return;` so the nested notification (settle -> setPivot -> sync) renders and the outer stale call does not overwrite it. New problem calls `presets.clear()` BEFORE `state.reset()`, because the reset renders and must render a blank problem (else a stale "From the link" line stays).
+- `interact.js` keeps the place and aim branches separate (`completesLockedForce`) so each can be mutated alone.
+- Settling the pivot BEFORE consuming it is an equivalent mutant (setPivot always moves the derived step off 'pivot', so a nested settle cannot apply it twice); no row is claimed for it.
+- An overflowing number (400 digits) is refused in `parseNumber` (`Number.isFinite`), because `snapMagnitude(Infinity)` returns 10 N, not 100.
+
+### Problems encountered and how they were resolved
+
+- The mutation tool's 12-failing-tests limit: the new tests print through `fmt` and release through `pointerup`, so the old row "fmt prints toFixed directly" grew to 18 failing and "pointerup no longer ends a drag" to 13; three new presets rows (absent parameter, pivot read from fp, mag read from angle, plus the sign pattern) were also 14-24. Fixed by splitting the fmt row in two narrow ones, keeping interact's branches separate, trimming one test's reliance on pointerup (now exactly 12), dropping two rows the coverage did not need and narrowing two others.
+- `app.js` has no DOM-free test. Its wiring is pinned as text in `test/template.test.js` (four tests, each with a swap row), and the behaviour was checked in the real page (served over http, synthetic pointer events): a full link finishes at the draw step; New problem leaves a blank, free problem; Back does not re-apply the pivot; a pivot waits out an aim drag and a wobble and lands on release.
+
+### Open questions / next steps
+
+- Not merged and not published. The README documents the parameters.
+- `file://` links keep the query string in a real browser; the check above used a served page (the Browser pane cannot script a `file://` page).
+- Possible later work: a DOM-stub test that runs the built bundle so app.js wiring is behaviour-tested, not text-tested.
+
 ## 2026-10-10 — The build, executed: nine tasks by subagents, verified in a browser (not merged, not published)
 
 ### Summary
