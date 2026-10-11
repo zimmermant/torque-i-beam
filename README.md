@@ -25,7 +25,7 @@ Add optional query parameters to the page's address to start a problem part-way 
 | `angle` | force direction, degrees counterclockwise from +x | a number |
 | `pivot` | pivot location, metres | `x` or `x,y` (y omitted means 0) |
 
-Numbers are plain decimals (`-1`, `+2.5`, `.5`; no exponents, no hex). A value that does not parse is ignored, as if it were absent. If a parameter is repeated, the first one counts. Unknown parameters are ignored.
+Numbers are plain decimals (`-1`, `+2.5`, `.5`; no exponents, no hex). The page prints negative numbers with a real minus sign (−), and a number copied from the screen with that sign is accepted too. A value that does not parse is ignored, as if it were absent (the "From the link" line echoes at most its first 40 characters). If a parameter is repeated, the first one counts. Unknown parameters are ignored.
 
 Values are **snapped exactly as a click or drag would snap them**: locations to the 0.25 m grid and onto the beam, the magnitude to whole newtons between 10 and 100, the angle to the nearest of the 24 directions. A "From the link" line under the instruction lists what was set, what snapping changed (for example `mag 500 → 100`) and what was ignored.
 

@@ -4,7 +4,7 @@
 
 ### Summary
 
-Added optional query parameters that preset the force location (`fp=x[,y]`), force magnitude (`mag=N`), force direction (`angle=deg`) and pivot (`pivot=x[,y]`), per the approved design in `.superpowers/sdd/2026-10-10-torque-i-beam/urlpresets-brief.md`. New `src/presets.js` (`parsePresets`, `describePresets`, `createPresets`), optional `lockAim` / `completeLocked` hooks in `interact.js`, a third `locks` parameter on `steps.js` `instruction()`, a `sync()` in `app.js` that is now the only state subscriber, a `<p id="from-link">` line, and a README section. **188 tests** (was 148), **198 mutation rows** (was 124), `--coverage --strict`: 188 of 188 tests made to fail by at least one mutation, exit 0 (raw output in `docs/superpowers/mutation-coverage-run.txt`). `dist/torque_i_beam.html` rebuilt (60,157 bytes by build.js's count).
+Added optional query parameters that preset the force location (`fp=x[,y]`), force magnitude (`mag=N`), force direction (`angle=deg`) and pivot (`pivot=x[,y]`), per the approved design in `.superpowers/sdd/2026-10-10-torque-i-beam/urlpresets-brief.md`. New `src/presets.js` (`parsePresets`, `describePresets`, `createPresets`), optional `lockAim` / `completeLocked` hooks in `interact.js`, a third `locks` parameter on `steps.js` `instruction()`, a `sync()` in `app.js` that is now the only state subscriber, a `<p id="from-link">` line, and a README section. **196 tests** (was 148), **207 mutation rows** (was 124: 83 more), `--coverage --strict`: 196 of 196 tests made to fail by at least one mutation, exit 0 (raw output in `docs/superpowers/mutation-coverage-run.txt`). `dist/torque_i_beam.html` rebuilt (61,112 bytes by build.js's count). A review fix wave then followed (see the end of this entry).
 
 ### Decisions made and why
 
@@ -18,11 +18,22 @@ Added optional query parameters that preset the force location (`fp=x[,y]`), for
 
 ### Problems encountered and how they were resolved
 
-- The mutation tool's 12-failing-tests limit: the new tests print through `fmt` and release through `pointerup`, so the old row "fmt prints toFixed directly" grew to 18 failing and "pointerup no longer ends a drag" to 13; three new presets rows (absent parameter, pivot read from fp, mag read from angle, plus the sign pattern) were also 14-24. Fixed by splitting the fmt row in two narrow ones, keeping interact's branches separate, trimming one test's reliance on pointerup (now exactly 12), dropping two rows the coverage did not need and narrowing two others.
+- The mutation tool's 12-failing-tests limit: the new tests print through `fmt` and release through `pointerup`, so the old row "fmt prints toFixed directly" grew to 18 failing and "pointerup no longer ends a drag" to 13; four new presets rows (absent parameter, pivot read from fp, mag read from angle, and the loss of the optional sign) were also 14-24. Fixed by splitting the fmt row in two narrow ones, keeping interact's branches separate, trimming one test's reliance on pointerup (now exactly 12), dropping two rows the coverage did not need and narrowing two others.
 - `app.js` has no DOM-free test. Its wiring is pinned as text in `test/template.test.js` (four tests, each with a swap row), and the behaviour was checked in the real page (served over http, synthetic pointer events): a full link finishes at the draw step; New problem leaves a blank, free problem; Back does not re-apply the pivot; a pivot waits out an aim drag and a wobble and lands on release.
+
+### Fix wave (review of the above)
+
+- `completeLocked` was only tested through a hand-copied mirror in `test/interact.test.js`; a reviewer swapped its arguments, removed its force-point guard and flipped its return value in a scratch copy and all 188 tests still passed. It now lives in the controller (`presets.completeLocked(state)`), `app.js` only forwards to it, the interact rig uses the real thing, and four presets tests plus four rows pin it.
+- `NUMBER` is written unambiguously (`\d+(\.\d*)?`): the old form took 1.6 s on 60,000 digits plus a bad last character. A timing test (under 250 ms) and a row that restores the old form guard it.
+- A pasted minus sign (U+2212) is accepted at the start of every number (the page prints that sign, so values copied from the screen work).
+- A rejected value is echoed at most 40 characters long, then an ellipsis; `.from-link` wraps anywhere.
+- An `Adjusted` note is written only if the printed before and after differ (`fp=-0.001` and `mag=49.999` no longer read as no-ops).
+- Added the `textContent` -> `innerHTML` security row for the From-the-link line.
+- Final numbers: **196 tests**, **207 rows**, coverage 196 of 196.
 
 ### Open questions / next steps
 
+- New problem is disabled while the board is empty, so a link's locks and the "From the link" line cannot be cleared from the empty starting board without first placing a point (consistent with existing behaviour; edit the URL to change them).
 - Not merged and not published. The README documents the parameters.
 - `file://` links keep the query string in a real browser; the check above used a served page (the Browser pane cannot script a `file://` page).
 - Possible later work: a DOM-stub test that runs the built bundle so app.js wiring is behaviour-tested, not text-tested.
