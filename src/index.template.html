@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torque on an I-beam</title>
+<!--INLINE_CSS-->
+</head>
+<body>
+<h1>Torque on an I-beam</h1>
+<p class="lede">Apply a force, choose a pivot, draw the lever arm, then predict which way the beam will turn.</p>
+
+<ol id="steps" class="steps" aria-label="Steps"></ol>
+<p id="instruction" class="instruction" aria-live="polite"></p>
+<p id="from-link" class="from-link" hidden></p>
+
+<div class="layout">
+  <section class="stage">
+    <svg id="scene-svg" viewBox="0 0 960 560" role="img" aria-label="An I-beam seen from the side, with the force, pivot and lever arm you place"></svg>
+    <div class="predict" role="group" aria-label="Your prediction">
+      <button type="button" data-answer="cw">Clockwise (&minus;)</button>
+      <button type="button" data-answer="ccw">Counterclockwise (+)</button>
+      <button type="button" data-answer="zero">Neither (&tau; = 0)</button>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="back">Back</button>
+      <button type="button" id="new-problem">New problem</button>
+      <button type="button" id="replay" hidden>Replay</button>
+      <button type="button" id="same-force" hidden>Same force, new pivot</button>
+    </div>
+  </section>
+  <aside id="panel" class="side" aria-label="Numbers"></aside>
+</div>
+
+<p class="note">Torque is &tau; = r &times; F. Counterclockwise is positive, clockwise negative. The beam&rsquo;s own weight and gravity are ignored.</p>
+
+<!--INLINE_JS-->
+</body>
+</html>

@@ -1,0 +1,104 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: #f7f7f8;
+  color: #111827;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+h1 { font-size: 20px; margin: 0 0 4px; }
+.lede { margin: 0 0 12px; color: #555b66; font-size: 14px; }
+
+/* step indicator */
+.steps {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  list-style: none; margin: 0 0 10px; padding: 0;
+}
+.steps li {
+  padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  border: 1px solid #d8dbe0; background: #fff; color: #6b7280;
+}
+.steps li.is-done    { background: #e8f1fb; border-color: #b9d3ee; color: #28598a; }
+.steps li.is-current { background: #111827; border-color: #111827; color: #fff; }
+
+.instruction { margin: 0 0 12px; min-height: 22px; font-size: 15px; font-weight: 600; }
+.from-link { margin: -6px 0 12px; font-size: 13px; color: #555b66; overflow-wrap: anywhere; }
+.from-link[hidden] { display: none; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 14px;
+  max-width: 1400px;
+  align-items: start;
+}
+
+.stage {
+  background: #fff; border: 1px solid #e3e5e9; border-radius: 10px; overflow: hidden;
+}
+.stage svg { display: block; width: 100%; height: auto; touch-action: none; user-select: none; }
+
+/* the beam answers to the pointer whenever a press would place something */
+.beam--armed { cursor: crosshair; }
+.beam--armed:hover .beam-web    { fill: #cfe0f3; }
+.beam--armed:hover .beam-flange { fill: #7f93aa; }
+
+/* handles: every one that can be grabbed must visibly respond */
+.handle { cursor: grab; }
+.handle:hover .dot { fill: #fff6e8; stroke-width: 4; }
+.handle:hover .hit { fill: rgba(17, 24, 39, 0.06); }
+.handle--active { cursor: grabbing; }
+.handle--active .dot { fill: #ffe9c7; stroke-width: 4; }
+.handle--active .hit { fill: rgba(17, 24, 39, 0.1); }
+.handle--idle, .handle--idle .hit, .handle--idle .dot { cursor: default; pointer-events: none; }
+
+/* the arrows, labels, glyph and torque arc are drawn over the beam; they must not steal its hover.
+   (Handles are circles and the beam is rects, so both stay interactive.) */
+#scene-svg line, #scene-svg text, #scene-svg polygon, #scene-svg path { pointer-events: none; }
+
+/* buttons */
+button {
+  font: inherit; font-size: 14px; font-weight: 600;
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid #c4c9d2; background: #fff; color: #111827; cursor: pointer;
+  transition: background .12s, border-color .12s, transform .05s;
+}
+button:hover:not(:disabled)  { background: #eef2f7; border-color: #8a94a3; }
+button:active:not(:disabled) { background: #dde4ee; transform: translateY(1px); }
+button:focus-visible { outline: 3px solid #3a86c8; outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button[hidden] { display: none; }
+
+.predict, .toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+.predict { border-top: 1px solid #eceef1; background: #fafafb; }
+.predict button.is-selected { background: #111827; border-color: #111827; color: #fff; opacity: 1; }
+.predict button.is-right    { background: #1f7a45; border-color: #1f7a45; color: #fff; opacity: 1; }
+.predict button.is-wrong    { background: #b42318; border-color: #b42318; color: #fff; opacity: 1; }
+
+/* the side panel */
+.side { display: grid; gap: 10px; }
+.card { background: #fff; border: 1px solid #e3e5e9; border-radius: 10px; padding: 10px 12px; }
+.card h3 {
+  margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: #6b7280;
+}
+.card h3 b { font-family: Georgia, serif; font-style: italic; text-transform: none; color: #111827; font-size: 14px; }
+.card--warn   { border-color: #e9b86b; background: #fffaf0; }
+.card--result { border-color: #c9b6f2; background: #fbf9ff; }
+.row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 14px; }
+.row .k { color: #6b7280; }
+.row .v { font-family: ui-monospace, "SF Mono", Menlo, monospace; text-align: right; }
+.row.ok  .v { color: #1f7a45; }
+.calc { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; line-height: 1.7; margin: 2px 0 8px; }
+.calc > div:not(:first-child) { padding-left: 1.4em; }
+.calc > .calc-k { margin-top: 2px; font-weight: 700; padding-left: 0; }
+.row.warn .v { color: #b45309; }
+.badge { background: #111827; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-family: system-ui, sans-serif; }
+.note { margin: 12px 0 0; font-size: 12px; color: #6b7280; max-width: 1400px; }
+.card .note { margin: 6px 0 0; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+}

@@ -1,5 +1,87 @@
 # Lab Notebook
 
+## 2026-10-11 - Optional URL presets (fp, mag, angle, pivot)
+
+### Summary
+
+Added optional query parameters that preset the force location (`fp=x[,y]`), force magnitude (`mag=N`), force direction (`angle=deg`) and pivot (`pivot=x[,y]`), per the approved design in `.superpowers/sdd/2026-10-10-torque-i-beam/urlpresets-brief.md`. New `src/presets.js` (`parsePresets`, `describePresets`, `createPresets`), optional `lockAim` / `completeLocked` hooks in `interact.js`, a third `locks` parameter on `steps.js` `instruction()`, a `sync()` in `app.js` that is now the only state subscriber, a `<p id="from-link">` line, and a README section. **196 tests** (was 148), **209 mutation rows** (was 124: 85 more), `--coverage --strict`: 196 of 196 tests made to fail by at least one mutation, exit 0 (raw output in `docs/superpowers/mutation-coverage-run.txt`). `dist/torque_i_beam.html` rebuilt (61,112 bytes by build.js's count). A review fix wave then followed (see the end of this entry).
+
+### Decisions made and why
+
+- Presets are UI-layer configuration held in `createPresets`' closure, outside the state: the five stored inputs stay five (derive, never store).
+- Values go through the SAME snapping as a click or drag (`snapToGrid`, `snapMagnitude`, `snapAngle`); a change is reported in the "From the link" line. Angle notes compare modulo 360 with a 0.01 degree tolerance so 53.13, -45, 360 produce no note.
+- The pending pivot is applied by `settle(state, drag)` only when the DERIVED step is 'pivot' and no drag is in progress, and is consumed first. Mid-drag, a short wobble un-aims the force and clears the pivot, so applying it then would lose it.
+- `app.js`: `sync()` is the only subscriber; `if (presets.settle(state, drag)) return;` so the nested notification (settle -> setPivot -> sync) renders and the outer stale call does not overwrite it. New problem calls `presets.clear()` BEFORE `state.reset()`, because the reset renders and must render a blank problem (else a stale "From the link" line stays).
+- `interact.js` keeps the place and aim branches separate (`completesLockedForce`) so each can be mutated alone.
+- Settling the pivot BEFORE consuming it is an equivalent mutant (setPivot always moves the derived step off 'pivot', so a nested settle cannot apply it twice); no row is claimed for it.
+- An overflowing number (400 digits) is refused in `parseNumber` (`Number.isFinite`), because `snapMagnitude(Infinity)` returns 10 N, not 100.
+
+### Problems encountered and how they were resolved
+
+- The mutation tool's 12-failing-tests limit: the new tests print through `fmt` and release through `pointerup`, so the old row "fmt prints toFixed directly" grew to 18 failing and "pointerup no longer ends a drag" to 13; four new presets rows (absent parameter, pivot read from fp, mag read from angle, and the loss of the optional sign) were also 14-24. Fixed by splitting the fmt row in two narrow ones, keeping interact's branches separate, trimming one test's reliance on pointerup (now exactly 12), dropping two rows the coverage did not need and narrowing two others.
+- `app.js` has no DOM-free test. Its wiring is pinned as text in `test/template.test.js` (four tests, each with a swap row), and the behaviour was checked in the real page (served over http, synthetic pointer events): a full link finishes at the draw step; New problem leaves a blank, free problem; Back does not re-apply the pivot; a pivot waits out an aim drag and a wobble and lands on release.
+
+### Fix wave (review of the above)
+
+- `completeLocked` was only tested through a hand-copied mirror in `test/interact.test.js`; a reviewer swapped its arguments, removed its force-point guard and flipped its return value in a scratch copy and all 188 tests still passed. It now lives in the controller (`presets.completeLocked(state)`), `app.js` only forwards to it, the interact rig uses the real thing, and four presets tests plus four rows pin it.
+- `NUMBER` is written unambiguously (`\d+(\.\d*)?`): the old form took 1.6 s on 60,000 digits plus a bad last character. A timing test (under 250 ms) and a row that restores the old form guard it.
+- A pasted minus sign (U+2212) is accepted at the start of every number (the page prints that sign, so values copied from the screen work).
+- A rejected value is echoed at most 40 characters long, then an ellipsis; `.from-link` wraps anywhere.
+- An `Adjusted` note is written only if the printed before and after differ (`fp=-0.001` and `mag=49.999` no longer read as no-ops).
+- Added the `textContent` -> `innerHTML` security row for the From-the-link line.
+- Final numbers: **196 tests**, **209 rows**, coverage 196 of 196.
+
+### Open questions / next steps
+
+- New problem is disabled while the board is empty, so a link's locks and the "From the link" line cannot be cleared from the empty starting board without first placing a point (consistent with existing behaviour; edit the URL to change them).
+- Not merged and not published. The README documents the parameters.
+- `file://` links keep the query string in a real browser; the check above used a served page (the Browser pane cannot script a `file://` page).
+- Possible later work: a DOM-stub test that runs the built bundle so app.js wiring is behaviour-tested, not text-tested.
+
+## 2026-10-10 — The build, executed: nine tasks by subagents, verified in a browser (not merged, not published)
+
+### Summary
+
+Executed `docs/superpowers/plans/2026-10-10-torque-i-beam.md` on branch `feat/initial-build` (31 commits ahead of `main` at the time of writing; 19 of them at the first verified build, `67b7d46`) with `ccpm-superpowers` / `superpowers:subagent-driven-development`: Tasks 1-9 each by a fresh **haiku** implementer and each reviewed by a **sonnet** reviewer (fix rounds resumed the implementer; every round ended with a scoped re-review); Task 10 (verification) by me as coordinator, which needs the Browser pane. Result:
+
+- **FINAL: 148 tests**, all passing. (At the first verified build it was 136: the plan said 125 and review rounds added 11, state +7, panel +1, interact +3; the post-review fix wave added 12 more. See 'Fix wave' below.)
+- **FINAL: 124 mutation rows** in `tools/mutations.mjs`; `node tools/mutations.mjs --coverage --strict` reports **148 of 148 tests are made to fail by at least one mutation**, exit 0. (At the first verified build: 108 rows, 136 of 136.) A full run takes about 10 minutes and now works on a temporary copy of the repo.
+- `dist/torque_i_beam.html`, **FINAL 52,258 bytes on disk** (build.js reports 52,208, which counts UTF-16 code units), byte-reproducible. (At the first verified build: 50,096 on disk; the plan said 49,542 before review rounds added code.)
+- Browser sweeps at the verified scene scale (646 px wide, viewport 1024x768): **1,080** force states, **5,040** states with a lever arm (all 5,040 valid, 0 missed), **864** revealed states: **zero** label/hit violations; the rotated beam stays at least 101.7 px inside the panel. **Re-run on the final build after the fix wave: zero again** (same three sweeps, same scale).
+- Real-mouse checks (below): all pass.
+- **What the tests do not reach:** `src/app.js` wiring and `scene.js`'s `draw()` and swing animation are verified only in the browser (everything else has unit tests), except `renderAll`'s control state, which is now covered through the pure `controlsView`.
+- The full SDD ledger, with every ruling and deferred minor, is committed at `docs/superpowers/sdd-ledger-torque-i-beam.md`; the mutation audit report and the raw coverage run are `docs/superpowers/mutation-audit-report.md` and `docs/superpowers/mutation-coverage-run.txt`.
+- **Not merged and not published.** Both need the user's explicit go-ahead.
+
+### Decisions made and why
+
+- **Cheapest tier for implementers, standard for reviewers, strongest for the whole-branch review.** The plan supplied complete verified code, so implementing was transcription plus test runs. The tier held: a haiku implementer transcribed an 800-line pair of files exactly.
+- **Byte-compare every task to the verified reference, and hand implementers SHA-256s.** Three haiku reports misstated things (line counts; a mutation run that was not real; a "syntax error" used to justify changing a typographic apostrophe to ASCII). After that I compared every task's files to the reference before review, and from Task 7 on gave each implementer the expected hashes to self-check. No transcription drift after that.
+- **Reviews are not rubber stamps: 7 of 9 tasks needed a fix round**, almost all in the *tests I had written into the plan*: a negative-zero test that could never fail (T2); a state machine with untested no-op guards and a stale-prediction hole (T5, fixed in code: `setForce` now clears the prediction and, on un-aim, the pivot and r); a panel test that never called the panel (T7); a "blocked" glyph test where every candidate scored 0, and a layout sweep that read the layout's own obstacle list (T8); a second finger hijacking a drag (T9, one-line guard). Where I fixed a test I proved the fix first in a scratch copy and delivered it as a finished file with a SHA-256.
+- **Ruled, not fixed:** a throwing `state` subscriber starving later ones (T5): the app has one subscriber and swallowing a render error would hide bugs. **Cost if wrong:** a second subscriber added later could be starved.
+- **"Every test has a named mutation it catches" had to be proved, not asserted.** My claim "all 27 mutations caught" was true but only 61 of 136 tests were failed by any of them. A sonnet worker added 78 rows (tool code only); I hardened the runner first so rows cannot game coverage (must parse, must not break test loading, must not be a no-op, at most 12 tests failing per row).
+
+- **Fix wave after the whole-branch review** (commits `239d29e`..`787226b` and a final rows/coverage commit): the mutation tool now works on a temporary copy; the r tip is clamped to the viewBox; `pointermove` is guarded against Back / New problem mid-drag; `controlsView` makes the control state testable and hides Replay for a zero torque; digit-to-leg, exact instruction texts and the control state are now tested; overlays no longer steal hover. Final numbers: **148 tests**, **124 mutation rows**, `--coverage --strict` reports **148 of 148 tests made to fail by at least one mutation**, exit 0 (`docs/superpowers/mutation-coverage-run.txt`); `dist` is rebuilt (52,258 bytes on disk). The first full run found two new `controlsView` tests with no mutation, so rows were added for them.
+
+### Problems encountered and how they were resolved
+
+- **False alarm from a collapsed Browser pane.** The first sweep reported 24 + 75 label "violations", all one kind (a glyph digit 1.7-2.7 px from its own triangle). The pane was hidden (`innerWidth` 0) so the scene rendered 208 px wide; `getBBox` text metrics differ at that scale. At the verified 646 px the same build showed zero (worst own-glyph gap 3.1 px, exactly as before). Fixed the tool, not the threshold: `H.install()` now refuses to run under 600 px.
+- **Animation cannot be checked in a hidden pane**: `requestAnimationFrame` never fires there, and the harness forces reduced motion, which skips the animation entirely, so my first "swing" check proved nothing. Re-ran with `requestAnimationFrame` shimmed by a 16 ms timer (the app's own loop runs unchanged): the swing eases 0 -> -18 degrees (counterclockwise) and settles exactly; Replay restarts it; New problem mid-swing resets the pose and nothing moves afterwards.
+- **Stale screenshots look like bugs.** A screenshot taken straight after a drag showed the previous step ("Aim force") while the DOM already said "pivot". Read state from the DOM after a short wait; do not trust a screenshot taken in the same breath as the input. This is also the likeliest explanation of the one-off half-way r drag seen during prototyping: not reproduced in 8 fresh-load runs (5 earlier, 3 now), event logs always down / two moves / up.
+- **The mutation runner's own parse guard rejected the HTML template rows** (Node cannot `--check` an `.html`). Fixed: the guard applies to JavaScript only.
+
+### Real-mouse checks (Task 10, step 5)
+
+a) press-drag-up: theta_F 90 degrees, F = 0 i + 48 j N, step advances to pivot. b) 3-4-5 drag: 53.13 degrees, badge, black triangle 3-4-5 beside the arrow, 71 N, F = 42.6 i + 56.8 j. c) r stopped short: dashed amber, amber lever card, the exact instruction, answer buttons disabled. d) tip dragged onto the force point: r = -1.75 i m, "ends at the force point", buttons enabled. e) Back undid one input (r, not the pivot). f) pivot on the force point: straight to predict, "r = 0 ...", theta_r a dash. g) force along the beam: exactly 0 N.m, no swing, no arc, `0 k-hat`, never `-0`. h) wrong prediction: "Not quite. The torque is -99.4 N.m ... clockwise", chosen button red, beam swings clockwise with a ghost outline, worked arithmetic (-1.75)(56.8) = -99.4. i) swing lifecycle (above). j) beam hover turns the web blue and darkens the flanges; disabled buttons visibly greyed. Narrow screen (375 px): one column, panel below the scene, no horizontal overflow.
+
+### Open questions / next steps
+
+- **Whole-branch review (strongest model) and `finishing-a-development-branch`** come next; merging and publishing need the user's go-ahead.
+- Deferred minors are in the ledger. The ones worth a decision: (1) `pointermove` throws a TypeError if Back / New problem fires mid-drag (latent; guard with `if (!s.forcePoint)` / `if (!s.pivot)`); (2) `lostpointercapture` and `endDrag` idempotence are untested; (3) `panelHtml(s,'reveal')` throws on a state without a valid r and a prediction (safe only because callers derive the step from the same snapshot); (4) the scene is pointer-only (spec non-goal) and the handle hit circles are about 8 px radius on a 375 px phone; (5) the instruction text is rewritten every render inside an `aria-live` region; (6) focus is lost when Replay / Same force are hidden or Back is disabled while focused.
+- Tests the mutation audit found **weaker than their names** (all still caught by some mutation): the physics-level "printed arithmetic closes to within 0.03" test never calls the panel (the panel-level twin is the real check; its comment overclaims that it catches *unrounded* operands, which it does not); the glyph "40 px" test compares against the imported constant; the `rtip` handle press in an integration test would still pass if treated as a new pivot; the `fmt` null/undefined guards are redundant (equivalent mutants). `fmt(2.675) === '2.67'` is claimed to pin `toFixed` over `Math.round` but does not.
+- The own-glyph label gap threshold (3 px) sits 0.1 px under the measured worst (3.1 px): that is a narrow margin, not a comfortable one.
+- Not decided: whether the force arrow should rotate with the beam on reveal (it stays put, with a ghost outline of the beam).
+
 ## 2026-10-10 — Implementation plan written from a verified prototype
 
 ### Summary
