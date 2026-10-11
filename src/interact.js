@@ -62,10 +62,15 @@ export function createInteraction(svg, state, hooks) {
     if (!tryCapture(svg, e.pointerId)) return;        // no capture, no drag
     e.preventDefault();
     dragPointerId = e.pointerId;
-    if (action === 'place') {
-      state.setForcePoint(world);
-      setDrag('force');
-    } else if (action === 'aim') {
+    if (action === 'place' || action === 'aim') {
+      if (action === 'place') state.setForcePoint(world);
+      // A link that fixes both the size and the direction completes the force with this press:
+      // nothing is left to drag, so release at once and latch nothing (like the auto-r branch below).
+      if (hooks.completeLocked && hooks.completeLocked()) {
+        svg.releasePointerCapture(e.pointerId);
+        dragPointerId = null;
+        return;
+      }
       setDrag('force');
     } else if (action === 'pivot') {
       state.setPivot(world);
@@ -86,7 +91,12 @@ export function createInteraction(svg, state, hooks) {
     const s = state.getState();
     // New problem or Back (a second finger, or the keyboard) can empty the state mid-drag;
     // a move then has nothing to steer, and must not throw on the missing point.
-    if (drag === 'force') { if (s.forcePoint) state.setForce(aimFromPointer(s.forcePoint, world)); }
+    if (drag === 'force') {
+      if (s.forcePoint) {
+        const aim = aimFromPointer(s.forcePoint, world);
+        state.setForce(hooks.lockAim ? hooks.lockAim(aim) : aim);   // a link may fix the size and/or the direction
+      }
+    }
     else if (s.pivot) { state.setRTip(leverTipFromPointer(s.pivot, world)); }
   });
 

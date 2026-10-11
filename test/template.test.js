@@ -66,7 +66,7 @@ test('app.js: sync is the only subscriber, it settles before it renders, and sta
 // Mutation: reset first, clear second. The reset renders the old summary, and the clear that
 // follows does not re-render, so "From the link" would stay on a blank problem.
 test('app.js: New problem clears the presets BEFORE it resets the state', () => {
-  assert.match(appJs, /els\.newProblem\.addEventListener\('click', \(\) => \{\s*presets\.clear\(\);\s*state\.reset\(\);\s*\}\);/);
+  assert.match(appJs, /els\.newProblem\.addEventListener\('click', \(\) => \{\s*presets\.clear\(\);[^\n]*\n\s*state\.reset\(\);\s*\}\);/);
 });
 
 // Mutations: the locks are not handed to instruction(); the summary line is never shown or never

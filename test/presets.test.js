@@ -36,9 +36,10 @@ test('parsePresets: each parameter on its own, with and without the leading "?"'
 
 // Mutations: the text is not trimmed; the number pattern loses its optional sign.
 test('parsePresets: whitespace is trimmed, and signs, decimals and a bare ".5" or "5." are numbers', () => {
-  assert.deepStrictEqual(parse(['fp', ' 1.5 , -0.5 ']), { ...EMPTY, fp: { x: 1.5, y: -0.5 } });
-  assert.deepStrictEqual(parse(['pivot', '+2,.5']).pivot, { x: 2, y: 0.5 });
-  assert.deepStrictEqual(parse(['pivot', '-.5,5.']).pivot, { x: -0.5, y: 0.25 });
+  assert.deepStrictEqual(parse(['fp', ' 1.5 , -0.25 ']), { ...EMPTY, fp: { x: 1.5, y: -0.25 } });
+  assert.deepStrictEqual(parse(['pivot', '+2,.25']), { ...EMPTY, pivot: { x: 2, y: 0.25 } });
+  assert.deepStrictEqual(parse(['pivot', '-.5,-.25']), { ...EMPTY, pivot: { x: -0.5, y: -0.25 } });
+  assert.deepStrictEqual(parse(['pivot', '2.,0.']), { ...EMPTY, pivot: { x: 2, y: 0 } });
   assert.strictEqual(parse(['mag', ' +40 ']).mag, 40);
   assert.strictEqual(parse(['angle', '-45']).angle, 315);
 });
@@ -170,7 +171,8 @@ test('describePresets: a coordinate that snaps to zero prints 0, never -0', () =
   assert.ok(Object.is(p.pivot.x, 0) && Object.is(p.pivot.y, 0), 'positive zero');
   assert.ok(Object.is(p.fp.x, 0), 'fp=-0 is positive zero too');
   const text = describePresets(p);
-  assert.ok(!text.includes('-0') && !text.includes('−0'), text);
+  const setPart = text.split(' Adjusted')[0];                  // the note legitimately quotes the typed -0.01
+  assert.ok(!setPart.includes('-0') && !setPart.includes('−0'), setPart);
   assert.strictEqual(text, 'From the link: force at (0, 0) m, pivot at (0, 0) m. Adjusted: pivot (−0.01, −0.01) → (0, 0).');
 });
 

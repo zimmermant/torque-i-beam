@@ -23,13 +23,21 @@ export function deriveStep(s, drag) {
 
 const TURN_WORD = { ccw: 'counterclockwise', cw: 'clockwise' };
 
-export function instruction(step, s) {
+// `locks` are the size and direction a link fixed (null = free); the default is today's wording.
+export function instruction(step, s, locks = { mag: null, angle: null }) {
   const d = derive(s);
   switch (step) {
     case 'place':
-      return 'Click the beam where the force acts.';
-    case 'aim':
+      return locks.mag !== null && locks.angle !== null
+        ? 'Click the beam where the force acts. The link fixes its size and direction.'
+        : 'Click the beam where the force acts.';
+    case 'aim': {
+      const magLocked = locks.mag !== null, angleLocked = locks.angle !== null;
+      if (magLocked && angleLocked) return 'Press the force point to apply the force. The link fixes its size and direction.';
+      if (magLocked) return `Drag away from that point to set the force’s direction. Its size is fixed at ${fmt(locks.mag)} N.`;
+      if (angleLocked) return `Drag away from that point to set the force’s size. Its direction is fixed at ${fmt(locks.angle)}°.`;
       return 'Drag away from that point to set the force’s direction and size. It snaps to common angles.';
+    }
     case 'pivot':
       return 'Click the beam to choose the pivot.';
     case 'draw':
