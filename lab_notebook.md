@@ -1,5 +1,23 @@
 # Lab Notebook
 
+## 2026-10-11 - Merged to main
+
+### Summary
+`feat/initial-build` (torque I-beam simulation plus optional URL presets) was merged into `main` with `--no-ff` (merge commit 1b730d0) at the user's explicit request ("merge to main"). Branch forked from `main` @ e34003f, which had not moved. No remote exists, so nothing was pushed or published (GitHub Pages is still undecided).
+
+### Decisions made
+- Merged locally (option 1 of the finishing menu); `--no-ff` keeps the feature's history as one visible unit.
+- Merged result re-verified: 196 of 196 tests pass; `node build.js` reproduces the committed `dist/torque_i_beam.html` (61,112 bytes) with a clean tree.
+- Deleted the merged branch `feat/initial-build`.
+
+### Problems encountered
+None.
+
+### Open questions / next steps
+- Publishing (GitHub Pages or other) and adding a remote: user's decision.
+- Items awaiting the user's confirmation: R8 (beam only a placement preference for labels), the predict-step wording "r = 0 and tau = 0" gives the answer away, the force arrow stays during the swing, New problem is disabled on an empty board (so link locks cannot be cleared before placing a point), ~16 px layout shift from the "From the link:" line.
+- More beam geometries were planned as a later extension.
+
 ## 2026-10-11 - Optional URL presets (fp, mag, angle, pivot)
 
 ### Summary
