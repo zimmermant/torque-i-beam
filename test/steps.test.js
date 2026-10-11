@@ -167,3 +167,54 @@ test('every instruction reads exactly as written', () => {
   const r0 = at(st => { st.setForcePoint({ x: 1, y: 0 }); st.setForce({ mag: 40, angle: 90 }); st.setPivot({ x: 1, y: 0 }); });
   assert.strictEqual(instruction('predict', r0), 'The pivot is at the force point, so r = 0 and \u03c4 = 0. Predict the rotation.');
 });
+
+// --- instruction text when the link locks the force's size and/or direction ---------------------
+const FREE = { mag: null, angle: null };
+const PLACE = 'Click the beam where the force acts.';
+const AIM = 'Drag away from that point to set the force\u2019s direction and size. It snaps to common angles.';
+
+// Mutations: the third parameter's default stops being "nothing locked"; a null lock counts as
+// a lock; the place text changes when only one thing is locked.
+test('instruction: with nothing locked (no third argument, or null locks) the texts are exactly today\u2019s', () => {
+  for (const locks of [undefined, FREE]) {
+    assert.strictEqual(instruction('place', stateFor('place'), locks), PLACE);
+    assert.strictEqual(instruction('aim', stateFor('aim'), locks), AIM);
+    assert.strictEqual(instruction('pivot', stateFor('pivot'), locks), 'Click the beam to choose the pivot.');
+  }
+  assert.strictEqual(instruction('place', stateFor('place')), PLACE);
+  assert.strictEqual(instruction('place', stateFor('place'), { mag: 50, angle: null }), PLACE, 'one lock leaves the place text alone');
+  assert.strictEqual(instruction('place', stateFor('place'), { mag: null, angle: 90 }), PLACE);
+});
+
+// Mutations: the two one-lock branches swap; the number is not run through fmt; an angle of 0
+// is treated as no lock; the degree sign is dropped.
+test('instruction: aim, with the magnitude locked, the angle locked, or both', () => {
+  const aim = stateFor('aim');
+  assert.strictEqual(instruction('aim', aim, { mag: 50, angle: null }),
+    'Drag away from that point to set the force\u2019s direction. Its size is fixed at 50 N.');
+  assert.strictEqual(instruction('aim', aim, { mag: null, angle: T }),
+    'Drag away from that point to set the force\u2019s size. Its direction is fixed at 53.13\u00b0.');
+  assert.strictEqual(instruction('aim', aim, { mag: null, angle: 0 }),
+    'Drag away from that point to set the force\u2019s size. Its direction is fixed at 0\u00b0.');
+  assert.strictEqual(instruction('aim', aim, { mag: null, angle: 315 }),
+    'Drag away from that point to set the force\u2019s size. Its direction is fixed at 315\u00b0.');
+  assert.strictEqual(instruction('aim', aim, { mag: 50, angle: 90 }),
+    'Press the force point to apply the force. The link fixes its size and direction.');
+});
+
+// Mutation: the both-locked place text is missing, so the student would not know that a plain
+// click finishes the force.
+test('instruction: place, with both locked, says the link fixes the force', () => {
+  assert.strictEqual(instruction('place', stateFor('place'), { mag: 50, angle: 90 }),
+    'Click the beam where the force acts. The link fixes its size and direction.');
+  assert.strictEqual(instruction('place', stateFor('place'), { mag: 50, angle: 0 }),
+    'Click the beam where the force acts. The link fixes its size and direction.', 'an angle of 0 still counts');
+});
+
+// Mutation: the locks leak into the steps they do not belong to.
+test('instruction: the locks change nothing after the aim step', () => {
+  const L = { mag: 50, angle: 90 };
+  for (const step of ['pivot', 'draw', 'predict', 'reveal']) {
+    assert.strictEqual(instruction(step, stateFor(step), L), instruction(step, stateFor(step)), step);
+  }
+});
